@@ -2,8 +2,7 @@ import axios from 'axios';
 import { store } from '../store';
 import { logoutAction } from '../store/authSlice';
 
-// Change this URL to point to your live Spring Boot backend API
-export const BASE_URL = 'http://localhost:8080/api';//'https://patel-samaj-backend.onrender.com/api';
+export const BASE_URL = 'https://patel-samaj-backend.onrender.com/api';
 
 const apiClient = axios.create({
   baseURL: BASE_URL,
