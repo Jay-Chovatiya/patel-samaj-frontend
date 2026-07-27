@@ -1,0 +1,673 @@
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, View, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity } from 'react-native';
+import { Text, TextInput, HelperText, Card, Button, IconButton } from 'react-native-paper';
+import { useForm, Controller } from 'react-hook-form';
+import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+
+import { useSelector } from 'react-redux';
+import { themeColors } from '../../theme';
+import { AppHeader } from '../../components/AppHeader';
+import { PrimaryButton } from '../../components/PrimaryButton';
+import { DatePicker } from '../../components/DatePicker';
+import { BottomSheet } from '../../components/BottomSheet';
+import { ConfirmationDialog } from '../../components/ConfirmationDialog';
+import { RootState } from '../../store';
+import { RootStackParamList } from '../../navigation/types';
+import apiClient from '../../api/client';
+import { formatCurrency } from '../../utils/format';
+import { Item, EventItem, Event } from '../../types';
+
+type RoutePropType = RouteProp<RootStackParamList, 'EventForm'>;
+type NavigationProp = StackNavigationProp<RootStackParamList>;
+
+interface SelectedItemState {
+  itemId: number;
+  name: string;
+  quantity: number;
+  price: number;
+}
+
+export const EventFormScreen: React.FC = () => {
+  const route = useRoute<RoutePropType>();
+  const navigation = useNavigation<NavigationProp>();
+  const queryClient = useQueryClient();
+  const editId = route.params?.id;
+  const isFromLogin = useSelector((state: RootState) => state.auth.isFromLogin);
+
+  const [selectedItems, setSelectedItems] = useState<SelectedItemState[]>([]);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [closeDialogVisible, setCloseDialogVisible] = useState(false);
+  const [loadingInitial, setLoadingInitial] = useState(false);
+  const [originalStatusId, setOriginalStatusId] = useState<number | null>(null);
+  const [originalIsClosed, setOriginalIsClosed] = useState<boolean | null>(null);
+
+  // Fetch Available Inventory Items
+  const { data: inventoryItems = [] } = useQuery<Item[]>({
+    queryKey: ['items'],
+    queryFn: async () => {
+      const res = await apiClient.get('/items');
+      return res.data;
+    },
+  });
+
+  const { control, handleSubmit, setValue, reset, formState: { errors } } = useForm({
+    defaultValues: {
+      familyHeadName: '',
+      contactNumber: '',
+      email: '',
+      eventType: '',
+      eventDate: new Date(),
+      remarks: '',
+      paidAmount: '0',
+    },
+  });
+
+  // Calculate live total amount
+  const liveTotalAmount = selectedItems.reduce((sum, item) => sum + item.quantity * item.price, 0);
+
+  // Load existing event data if editing
+  useEffect(() => {
+    if (editId) {
+      const fetchEvent = async () => {
+        setLoadingInitial(true);
+        try {
+          const res = await apiClient.get(`/events/${editId}`);
+          const event: Event = res.data;
+
+          reset({
+            familyHeadName: event.familyHeadName,
+            contactNumber: event.contactNumber,
+            email: event.email || '',
+            eventType: event.eventType,
+            eventDate: new Date(event.eventDate),
+            remarks: event.remarks || '',
+            paidAmount: event.paidAmount?.toString() || '0',
+          });
+
+          setOriginalStatusId(event.statusId);
+          setOriginalIsClosed(event.isClosed);
+
+          // Restore selected items
+          const mappedItems = event.items.map((i) => ({
+            itemId: i.itemId,
+            name: i.itemName,
+            quantity: i.quantity,
+            price: i.priceAtBooking,
+          }));
+          setSelectedItems(mappedItems);
+        } catch (err) {
+          // Handle error loading
+        } finally {
+          setLoadingInitial(false);
+        }
+      };
+      fetchEvent();
+    }
+  }, [editId]);
+
+  // Mutation to create/update
+  const saveEventMutation = useMutation({
+    mutationFn: async (formData: any) => {
+      const payload = {
+        ...(editId ? { eventId: parseInt(editId, 10) } : {}),
+        familyHeadName: formData.familyHeadName,
+        contactNumber: formData.contactNumber,
+        email: formData.email,
+        eventType: formData.eventType,
+        eventDate: formData.eventDate.toISOString(),
+        remarks: formData.remarks,
+        paidAmount: parseFloat(formData.paidAmount || '0'),
+        totalAmount: liveTotalAmount,
+        items: selectedItems.map((item) => ({
+          itemId: item.itemId,
+          itemName: item.name,
+          quantity: item.quantity,
+          priceAtBooking: item.price,
+        })),
+        isClosed: editId ? originalIsClosed : false,
+        statusId: editId ? originalStatusId : 1,
+      };
+
+      if (editId) {
+        // PUT for editing
+        return (await apiClient.put('/events', payload)).data;
+      } else {
+        // POST for creation
+        return (await apiClient.post('/events', payload)).data;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+      if (editId) {
+        queryClient.invalidateQueries({ queryKey: ['event', editId] });
+      }
+      navigation.goBack();
+    },
+  });
+
+  // Close Event Mutation for Admin
+  const closeEventMutation = useMutation({
+    mutationFn: async () => {
+      if (!editId) return;
+      const response = await apiClient.put(`/events/close/${editId}`);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+      queryClient.invalidateQueries({ queryKey: ['event', editId] });
+      setCloseDialogVisible(false);
+      navigation.goBack();
+    },
+  });
+
+  const onSubmit = (data: any) => {
+    if (selectedItems.length === 0) {
+      alert('Please select at least one item from the inventory.');
+      return;
+    }
+    saveEventMutation.mutate(data);
+  };
+
+  const handleItemsSelected = (ids: string[]) => {
+    const newSelection = ids.map((idStr) => {
+      const id = parseInt(idStr, 10);
+      const existing = selectedItems.find((s) => s.itemId === id);
+      if (existing) return existing;
+
+      const invItem = inventoryItems.find((i) => i.itemId === id);
+      return {
+        itemId: id,
+        name: invItem?.itemName || 'Unknown Item',
+        quantity: 1,
+        price: invItem?.currentPrice || 0,
+      };
+    });
+    setSelectedItems(newSelection);
+  };
+
+  const updateQuantity = (itemId: number, amount: number) => {
+    setSelectedItems((prev) =>
+      prev.map((item) => {
+        if (item.itemId === itemId) {
+          const newQty = Math.max(1, item.quantity + amount);
+          return { ...item, quantity: newQty };
+        }
+        return item;
+      })
+    );
+  };
+
+  const setDirectQuantity = (itemId: number, text: string) => {
+    const sanitized = text.replace(/[^0-9]/g, '');
+    let finalQty = parseInt(sanitized, 10);
+    if (isNaN(finalQty) || finalQty < 1) {
+      finalQty = 1;
+    }
+    setSelectedItems((prev) =>
+      prev.map((item) => {
+        if (item.itemId === itemId) {
+          return { ...item, quantity: finalQty };
+        }
+        return item;
+      })
+    );
+  };
+
+  const removeItem = (itemId: number) => {
+    setSelectedItems((prev) => prev.filter((item) => item.itemId !== itemId));
+  };
+
+  const selectedIds = selectedItems.map((i) => String(i.itemId));
+  // Prepare list items for BottomSheet selection
+  const selectorOptions = inventoryItems.map((i) => ({
+    id: String(i.itemId),
+    name: i.itemName,
+    price: i.currentPrice,
+    availableQty: undefined,
+  }));
+
+  return (
+    <View style={styles.container}>
+      <AppHeader
+        title={editId ? 'Update Booking' : 'Book Event'}
+        showBack={true}
+        onBack={() => navigation.goBack()}
+      />
+
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
+      >
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+          <View style={styles.formCard}>
+            <Text variant="titleMedium" style={styles.sectionHeader}>
+              Family Head Information
+            </Text>
+
+            <Controller
+              control={control}
+              name="familyHeadName"
+              rules={{ required: 'Family head name is required' }}
+              render={({ field: { onChange, onBlur, value } }) => (
+                <View style={styles.inputContainer}>
+                  <TextInput
+                    label="Family Head Name"
+                    mode="outlined"
+                    onBlur={onBlur}
+                    onChangeText={onChange}
+                    value={value}
+                    outlineColor={themeColors.border}
+                    activeOutlineColor={themeColors.primary}
+                    error={!!errors.familyHeadName}
+                    style={styles.input}
+                  />
+                  {errors.familyHeadName && (
+                    <HelperText type="error" visible={true}>
+                      {errors.familyHeadName.message}
+                    </HelperText>
+                  )}
+                </View>
+              )}
+            />
+
+            <Controller
+              control={control}
+              name="contactNumber"
+              rules={{
+                required: 'Contact number is required',
+                pattern: { value: /^[0-9]{10}$/, message: 'Enter valid 10-digit mobile number' },
+              }}
+              render={({ field: { onChange, onBlur, value } }) => (
+                <View style={styles.inputContainer}>
+                  <TextInput
+                    label="Contact Number"
+                    keyboardType="numeric"
+                    maxLength={10}
+                    mode="outlined"
+                    onBlur={onBlur}
+                    onChangeText={onChange}
+                    value={value}
+                    outlineColor={themeColors.border}
+                    activeOutlineColor={themeColors.primary}
+                    error={!!errors.contactNumber}
+                    style={styles.input}
+                    left={<TextInput.Icon icon="phone" />}
+                  />
+                  {errors.contactNumber && (
+                    <HelperText type="error" visible={true}>
+                      {errors.contactNumber.message}
+                    </HelperText>
+                  )}
+                </View>
+              )}
+            />
+
+            <Controller
+              control={control}
+              name="email"
+              rules={{
+                pattern: { value: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/, message: 'Enter a valid email' },
+              }}
+              render={({ field: { onChange, onBlur, value } }) => (
+                <View style={styles.inputContainer}>
+                  <TextInput
+                    label="Email Address (Optional)"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    mode="outlined"
+                    onBlur={onBlur}
+                    onChangeText={onChange}
+                    value={value}
+                    outlineColor={themeColors.border}
+                    activeOutlineColor={themeColors.primary}
+                    error={!!errors.email}
+                    style={styles.input}
+                    left={<TextInput.Icon icon="email" />}
+                  />
+                  {errors.email && (
+                    <HelperText type="error" visible={true}>
+                      {errors.email.message}
+                    </HelperText>
+                  )}
+                </View>
+              )}
+            />
+
+            <Text variant="titleMedium" style={[styles.sectionHeader, { marginTop: 12 }]}>
+              Booking Specifics
+            </Text>
+
+            <Controller
+              control={control}
+              name="eventType"
+              rules={{ required: 'Event type is required' }}
+              render={({ field: { onChange, onBlur, value } }) => (
+                <View style={styles.inputContainer}>
+                  <TextInput
+                    label="Event Type (e.g. Wedding, Meeting)"
+                    mode="outlined"
+                    onBlur={onBlur}
+                    onChangeText={onChange}
+                    value={value}
+                    outlineColor={themeColors.border}
+                    activeOutlineColor={themeColors.primary}
+                    error={!!errors.eventType}
+                    style={styles.input}
+                  />
+                  {errors.eventType && (
+                    <HelperText type="error" visible={true}>
+                      {errors.eventType.message}
+                    </HelperText>
+                  )}
+                </View>
+              )}
+            />
+
+            <Controller
+              control={control}
+              name="eventDate"
+              render={({ field: { onChange, value } }) => (
+                <DatePicker
+                  date={value}
+                  onChange={onChange}
+                  label="Event Date"
+                />
+              )}
+            />
+
+            {/* Equipment Items List */}
+            <View style={styles.itemsHeaderRow}>
+              <Text variant="titleMedium" style={styles.itemsSectionTitle}>
+                Selected Items ({selectedItems.length})
+              </Text>
+              <Button
+                mode="text"
+                onPress={() => setModalVisible(true)}
+                textColor={themeColors.primary}
+                icon="plus"
+              >
+                Select Items
+              </Button>
+            </View>
+
+            {selectedItems.map((item) => (
+              <View key={item.itemId} style={styles.selectedItemRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.itemNameText}>{item.name}</Text>
+                  <Text style={styles.itemPriceText}>₹{item.price.toFixed(2)} / unit</Text>
+                </View>
+                <View style={styles.qtyContainer}>
+                  <IconButton
+                    icon="minus"
+                    size={18}
+                    style={styles.qtyBtn}
+                    onPress={() => updateQuantity(item.itemId, -1)}
+                  />
+                  <TextInput
+                    value={String(item.quantity || '')}
+                    onChangeText={(text) => setDirectQuantity(item.itemId, text)}
+                    keyboardType="numeric"
+                    dense={true}
+                    mode="outlined"
+                    outlineColor={themeColors.border}
+                    activeOutlineColor={themeColors.primary}
+                    style={styles.qtyInput}
+                  />
+                  <IconButton
+                    icon="plus"
+                    size={18}
+                    style={styles.qtyBtn}
+                    onPress={() => updateQuantity(item.itemId, 1)}
+                  />
+                </View>
+                <IconButton
+                  icon="delete-outline"
+                  iconColor={themeColors.error}
+                  size={20}
+                  onPress={() => removeItem(item.itemId)}
+                />
+              </View>
+            ))}
+
+            {selectedItems.length === 0 && (
+              <Text style={styles.emptyItemsText}>No equipment items selected yet.</Text>
+            )}
+
+            {/* Live Financial Summaries */}
+            <View style={styles.billSummarySection}>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Subtotal</Text>
+                <Text style={styles.summaryValue}>{formatCurrency(liveTotalAmount)}</Text>
+              </View>
+
+              <Controller
+                control={control}
+                name="paidAmount"
+                rules={{
+                  validate: (v) => !isNaN(parseFloat(v)) && parseFloat(v) >= 0 || 'Enter valid paid amount',
+                }}
+                render={({ field: { onChange, onBlur, value } }) => (
+                  <View style={[styles.inputContainer, { marginTop: 12 }]}>
+                    <TextInput
+                      label="Advance Paid Amount (₹)"
+                      keyboardType="numeric"
+                      mode="outlined"
+                      onBlur={onBlur}
+                      onChangeText={onChange}
+                      value={value}
+                      outlineColor={themeColors.border}
+                      activeOutlineColor={themeColors.primary}
+                      error={!!errors.paidAmount}
+                      style={styles.input}
+                      left={<TextInput.Affix text="₹ " />}
+                    />
+                    {errors.paidAmount && (
+                      <HelperText type="error" visible={true}>
+                        {errors.paidAmount.message}
+                      </HelperText>
+                    )}
+                  </View>
+                )}
+              />
+
+              <View style={styles.cardDivider} />
+
+              <View style={styles.summaryRow}>
+                <Text style={[styles.summaryLabel, { fontWeight: 'bold' }]}>Grand Total Bill</Text>
+                <Text style={[styles.summaryValue, { fontWeight: 'bold', color: themeColors.primary }]}>
+                  {formatCurrency(liveTotalAmount)}
+                </Text>
+              </View>
+            </View>
+
+            <Controller
+              control={control}
+              name="remarks"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <View style={[styles.inputContainer, { marginTop: 12 }]}>
+                  <TextInput
+                    label="Remarks / Special Requests (Optional)"
+                    mode="outlined"
+                    multiline
+                    numberOfLines={3}
+                    onBlur={onBlur}
+                    onChangeText={onChange}
+                    value={value}
+                    outlineColor={themeColors.border}
+                    activeOutlineColor={themeColors.primary}
+                    style={styles.input}
+                  />
+                </View>
+              )}
+            />
+
+            <PrimaryButton
+              onPress={handleSubmit(onSubmit)}
+              loading={saveEventMutation.isPending || loadingInitial}
+              style={styles.saveBtn}
+            >
+              {editId ? 'UPDATE BOOKING' : 'CREATE BOOKING'}
+            </PrimaryButton>
+
+            {editId && isFromLogin && !originalIsClosed && (
+              <Button
+                mode="contained"
+                onPress={() => setCloseDialogVisible(true)}
+                buttonColor={themeColors.error}
+                icon="lock-outline"
+                style={{ marginTop: 12 }}
+                disabled={saveEventMutation.isPending || closeEventMutation.isPending}
+              >
+                CLOSE & LOCK BILL
+              </Button>
+            )}
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* Equipment Selector Modal */}
+      <BottomSheet
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        title="Select Rental Items"
+        items={selectorOptions}
+        selectedIds={selectedIds}
+        onSelect={handleItemsSelected}
+      />
+
+      {/* Confirmation Dialog for Closing Billing */}
+      <ConfirmationDialog
+        visible={closeDialogVisible}
+        title="Close Event Billing"
+        message="Are you sure you want to close and lock this event booking? Once closed, items selection and billing totals will be locked permanently and cannot be modified."
+        confirmLabel="Close Event"
+        cancelLabel="Keep Open"
+        onConfirm={() => closeEventMutation.mutate()}
+        onCancel={() => setCloseDialogVisible(false)}
+        loading={closeEventMutation.isPending}
+      />
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: themeColors.background,
+  },
+  scrollContent: {
+    padding: 16,
+    flexGrow: 1,
+    paddingBottom: 40,
+  },
+  formCard: {
+    backgroundColor: '#FFFFFF',
+    padding: 20,
+    borderRadius: 16,
+    elevation: 2,
+  },
+  sectionHeader: {
+    fontWeight: 'bold',
+    color: themeColors.secondary,
+    marginBottom: 12,
+  },
+  inputContainer: {
+    marginBottom: 10,
+  },
+  input: {
+    backgroundColor: '#FFFFFF',
+  },
+  itemsHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 16,
+    marginBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: themeColors.border,
+    paddingBottom: 4,
+  },
+  itemsSectionTitle: {
+    fontWeight: 'bold',
+    color: themeColors.secondary,
+  },
+  selectedItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: themeColors.border,
+  },
+  itemNameText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: themeColors.text,
+  },
+  itemPriceText: {
+    fontSize: 12,
+    color: themeColors.textMuted,
+    marginTop: 2,
+  },
+  qtyContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: themeColors.background,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: themeColors.border,
+    paddingHorizontal: 2,
+  },
+  qtyBtn: {
+    margin: 0,
+  },
+  qtyInput: {
+    width: 64,
+    height: 38,
+    textAlign: 'center',
+    fontSize: 14,
+    fontWeight: 'bold',
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 2,
+  },
+  emptyItemsText: {
+    textAlign: 'center',
+    color: themeColors.textMuted,
+    fontStyle: 'italic',
+    padding: 16,
+  },
+  billSummarySection: {
+    backgroundColor: themeColors.navyLight,
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 24,
+    marginBottom: 16,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  summaryLabel: {
+    color: themeColors.text,
+    fontSize: 14,
+  },
+  summaryValue: {
+    color: themeColors.text,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  cardDivider: {
+    height: 1,
+    backgroundColor: themeColors.border,
+    marginVertical: 10,
+  },
+  saveBtn: {
+    marginTop: 16,
+  },
+});
+
+export default EventFormScreen;
