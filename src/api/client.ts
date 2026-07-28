@@ -2,7 +2,7 @@ import axios from 'axios';
 import { store } from '../store';
 import { logoutAction } from '../store/authSlice';
 
-export const BASE_URL = 'https://patel-samaj-backend.onrender.com/api';
+export const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8080/api';
 
 const apiClient = axios.create({
   baseURL: BASE_URL,
