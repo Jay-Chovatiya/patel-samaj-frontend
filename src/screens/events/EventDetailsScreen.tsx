@@ -26,7 +26,7 @@ export const EventDetailsScreen: React.FC = () => {
   const queryClient = useQueryClient();
   const { id } = route.params;
 
-  const isFromLogin = useSelector((state: RootState) => state.auth.isFromLogin);
+  const isAdmin = useSelector((state: RootState) => state.auth.isAdmin);
 
   const [closeDialogVisible, setCloseDialogVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -281,17 +281,29 @@ export const EventDetailsScreen: React.FC = () => {
         {/* Actions */}
         {!isClosed && (
           <View style={styles.actionContainer}>
-            {event.statusId === 1 && (
-              <Button
-                mode="contained"
-                onPress={() => confirmStatusChange(2)}
-                buttonColor={themeColors.success}
-                icon="check-circle-outline"
-                style={styles.actionBtn}
-                disabled={updateStatusMutation.isPending || closeEventMutation.isPending}
-              >
-                APPROVE EVENT
-              </Button>
+            {event.statusId === 1 && isAdmin && (
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                <Button
+                  mode="contained"
+                  onPress={() => confirmStatusChange(2)}
+                  buttonColor={themeColors.success}
+                  icon="check-circle-outline"
+                  style={{ flex: 1 }}
+                  disabled={updateStatusMutation.isPending || closeEventMutation.isPending}
+                >
+                  APPROVE EVENT
+                </Button>
+                <Button
+                  mode="contained"
+                  onPress={() => confirmStatusChange(4)}
+                  buttonColor={themeColors.error}
+                  icon="close-circle-outline"
+                  style={{ flex: 1 }}
+                  disabled={updateStatusMutation.isPending || closeEventMutation.isPending}
+                >
+                  CANCEL EVENT
+                </Button>
+              </View>
             )}
             {event.statusId === 2 && (
               <Button
@@ -305,7 +317,7 @@ export const EventDetailsScreen: React.FC = () => {
                 MARK IN PROGRESS
               </Button>
             )}
-            {isFromLogin && (
+            {isAdmin && event.statusId === 3 && (
               <Button
                 mode="contained"
                 onPress={() => setCloseDialogVisible(true)}
@@ -314,7 +326,7 @@ export const EventDetailsScreen: React.FC = () => {
                 style={styles.actionBtn}
                 disabled={updateStatusMutation.isPending || closeEventMutation.isPending}
               >
-                CLOSE & LOCK BILL
+                CLOSE & LOCK EVENT
               </Button>
             )}
             <Button
@@ -345,7 +357,7 @@ export const EventDetailsScreen: React.FC = () => {
       <ConfirmationDialog
         visible={statusDialogVisible}
         title="Change Event Status"
-        message={`Are you sure you want to change the status to ${pendingStatusId === 2 ? 'APPROVED' : 'IN PROGRESS'}?`}
+        message={`Are you sure you want to change the status to ${pendingStatusId === 2 ? 'APPROVED' : pendingStatusId === 4 ? 'CANCELLED' : 'IN PROGRESS'}?`}
         confirmLabel="Update Status"
         cancelLabel="Cancel"
         onConfirm={handleStatusChangeConfirm}

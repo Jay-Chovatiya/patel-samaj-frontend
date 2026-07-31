@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
 import { Text, FAB } from 'react-native-paper';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useQuery } from '@tanstack/react-query';
+import { useSelector } from 'react-redux';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { themeColors, shadows } from '../../theme';
@@ -12,12 +13,13 @@ import { ReusableCard } from '../../components/ReusableCard';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { EmptyState } from '../../components/EmptyState';
 import { RootStackParamList } from '../../navigation/types';
+import { RootState } from '../../store';
 import apiClient from '../../api/client';
 import { formatCurrency, formatDate } from '../../utils/format';
 import { Event } from '../../types';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
-type TabType = 'ALL' | 'PENDING' | 'APPROVED' | 'IN_PROGRESS';
+type TabType = 'PENDING' | 'APPROVED' | 'IN_PROGRESS';
 
 const getEventStatusText = (item: Event) => {
   if (item.isClosed === true || item.statusId === 4) {
@@ -34,30 +36,55 @@ const getEventStatusText = (item: Event) => {
 
 export const EventListScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
-  const [activeTab, setActiveTab] = useState<TabType>('ALL');
+  const isAdmin = useSelector((state: RootState) => state.auth.isAdmin);
+
+  const [activeTab, setActiveTab] = useState<TabType>(isAdmin ? 'PENDING' : 'IN_PROGRESS');
   const [refreshing, setRefreshing] = useState(false);
 
-  // Map tabs to API endpoints
+  useEffect(() => {
+    if (!isAdmin) {
+      setActiveTab('IN_PROGRESS');
+    }
+  }, [isAdmin]);
+
+  // Map tabs to status-specific API endpoints
   const getEndpoint = (tab: TabType) => {
+    if (!isAdmin) return '/events/in-progress';
     switch (tab) {
       case 'PENDING':
         return '/events/pending';
       case 'APPROVED':
         return '/events/approved';
+      default:
       case 'IN_PROGRESS':
         return '/events/in-progress';
-      case 'ALL':
-      default:
-        return '/events';
     }
   };
 
+  const currentTab = isAdmin ? activeTab : 'IN_PROGRESS';
+
   const { data: events = [], isLoading, refetch } = useQuery<Event[]>({
-    queryKey: ['events', activeTab],
+    queryKey: ['events', currentTab],
     queryFn: async () => {
-      const res = await apiClient.get(getEndpoint(activeTab));
+      const res = await apiClient.get(getEndpoint(currentTab));
       return res.data || [];
     },
+  });
+
+  // Refetch events data whenever user navigates to Events tab
+  useFocusEffect(
+    React.useCallback(() => {
+      refetch();
+    }, [refetch])
+  );
+
+  // Filter events client-side to ensure closed events are excluded from status-specific tabs
+  const filteredEvents = events.filter((item) => {
+    const status = getEventStatusText(item);
+    if (activeTab === 'PENDING') return status === 'PENDING';
+    if (activeTab === 'APPROVED') return status === 'APPROVED';
+    if (activeTab === 'IN_PROGRESS') return status === 'IN_PROGRESS';
+    return true;
   });
 
   const handleRefresh = async () => {
@@ -100,19 +127,20 @@ export const EventListScreen: React.FC = () => {
     <View style={styles.container}>
       <AppHeader title="Events & Hall Bookings" />
 
-      {/* Top Tabs Custom bar */}
-      <View style={styles.tabsContainer}>
-        {renderTab('ALL', 'All')}
-        {renderTab('PENDING', 'Pending')}
-        {renderTab('APPROVED', 'Approved')}
-        {renderTab('IN_PROGRESS', 'In Progress')}
-      </View>
+      {/* Top Tabs Custom bar - shown for Admin */}
+      {isAdmin && (
+        <View style={styles.tabsContainer}>
+          {renderTab('PENDING', 'Pending')}
+          {renderTab('APPROVED', 'Approved')}
+          {renderTab('IN_PROGRESS', 'In Progress')}
+        </View>
+      )}
 
       {isLoading ? (
         <LoadingSpinner />
       ) : (
         <FlatList
-          data={events}
+          data={filteredEvents}
           keyExtractor={(item) => String(item.eventId)}
           contentContainerStyle={styles.listContainer}
           refreshControl={

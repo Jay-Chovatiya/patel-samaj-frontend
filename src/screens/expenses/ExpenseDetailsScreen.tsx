@@ -25,8 +25,7 @@ export const ExpenseDetailsScreen: React.FC = () => {
   const { id } = route.params;
   const [refreshing, setRefreshing] = React.useState(false);
 
-  const isFromLogin = useSelector((state: RootState) => state.auth.isFromLogin);
-  const isAdmin = isFromLogin === true;
+  const isAdmin = useSelector((state: RootState) => state.auth.isAdmin);
 
   const { data: expense, isLoading, isError } = useQuery<Expense>({
     queryKey: ['expense', id],

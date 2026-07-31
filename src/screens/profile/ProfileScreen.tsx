@@ -94,8 +94,7 @@ export const ProfileScreen: React.FC = () => {
     email: storeUser?.email || '',
   };
 
-  const isFromLogin = useSelector((state: RootState) => state.auth.isFromLogin);
-  const isAdmin = isFromLogin === true;
+  const isAdmin = useSelector((state: RootState) => state.auth.isAdmin);
 
   return (
     <View style={styles.container}>
@@ -111,14 +110,16 @@ export const ProfileScreen: React.FC = () => {
             <Text variant="headlineSmall" style={styles.name}>
               {activeProfile.fullName}
             </Text>
-            {!!activeProfile.email && (
+            {isAdmin && !!activeProfile.email && (
               <Text variant="bodyMedium" style={styles.email}>
                 {activeProfile.email}
               </Text>
             )}
-            <Text variant="bodyLarge" style={styles.mobile}>
-              {activeProfile.mobileNumber}
-            </Text>
+            {isAdmin && !!activeProfile.mobileNumber && (
+              <Text variant="bodyLarge" style={styles.mobile}>
+                {activeProfile.mobileNumber}
+              </Text>
+            )}
           </Card.Content>
         </Card>
 

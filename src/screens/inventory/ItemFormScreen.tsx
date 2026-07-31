@@ -24,8 +24,7 @@ export const ItemFormScreen: React.FC = () => {
   const queryClient = useQueryClient();
   const editId = route.params?.id;
 
-  const isFromLogin = useSelector((state: RootState) => state.auth.isFromLogin);
-  const isAdmin = isFromLogin === true;
+  const isAdmin = useSelector((state: RootState) => state.auth.isAdmin);
 
   const [loadingInitial, setLoadingInitial] = useState(false);
 

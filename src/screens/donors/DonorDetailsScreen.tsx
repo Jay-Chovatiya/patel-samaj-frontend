@@ -24,8 +24,7 @@ export const DonorDetailsScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const { id } = route.params;
 
-  const isFromLogin = useSelector((state: RootState) => state.auth.isFromLogin);
-  const isAdmin = isFromLogin === true;
+  const isAdmin = useSelector((state: RootState) => state.auth.isAdmin);
 
   const { data: donor, isLoading, isError, error } = useQuery<Donor>({
     queryKey: ['donor', id],

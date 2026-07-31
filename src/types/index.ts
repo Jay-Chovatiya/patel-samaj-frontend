@@ -2,6 +2,7 @@ export interface UserProfileDTO {
   fullName: string;
   mobileNumber: string;
   email?: string;
+  roleName?: string;
 }
 
 export interface UserDTO {
@@ -17,11 +18,12 @@ export interface ChangePasswordDTO {
 }
 
 export interface User {
-  userId: number;
+  userId?: number;
   fullName: string;
   email: string;
   mobileNumber: string;
   isActive: boolean;
+  roleName?: string;
 }
 
 export interface Donor {
