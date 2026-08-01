@@ -107,8 +107,7 @@ export const EditProfileScreen: React.FC = () => {
     },
   });
 
-  const isFromLogin = useSelector((state: RootState) => state.auth.isFromLogin);
-  const isAdmin = isFromLogin === true;
+  const isAdmin = useSelector((state: RootState) => state.auth.isAdmin);
 
   const onSubmit = (formData: UserProfileDTO) => {
     if (!isAdmin) {

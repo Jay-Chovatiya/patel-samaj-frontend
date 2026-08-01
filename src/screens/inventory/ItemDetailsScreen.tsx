@@ -26,8 +26,7 @@ export const ItemDetailsScreen: React.FC = () => {
   const queryClient = useQueryClient();
   const { id } = route.params;
 
-  const isFromLogin = useSelector((state: RootState) => state.auth.isFromLogin);
-  const isAdmin = isFromLogin === true;
+  const isAdmin = useSelector((state: RootState) => state.auth.isAdmin);
 
   const [deleteVisible, setDeleteVisible] = useState(false);
 

@@ -35,7 +35,7 @@ export const EventFormScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const queryClient = useQueryClient();
   const editId = route.params?.id;
-  const isFromLogin = useSelector((state: RootState) => state.auth.isFromLogin);
+  const isAdmin = useSelector((state: RootState) => state.auth.isAdmin);
 
   const [selectedItems, setSelectedItems] = useState<SelectedItemState[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
@@ -163,11 +163,24 @@ export const EventFormScreen: React.FC = () => {
     },
   });
 
+  // Update Status Mutation for Admin (e.g. Approve Event)
+  const updateStatusMutation = useMutation({
+    mutationFn: async (newStatusId: number) => {
+      if (!editId) return;
+      const response = await apiClient.put('/events', {
+        eventId: parseInt(editId, 10),
+        statusId: newStatusId,
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+      queryClient.invalidateQueries({ queryKey: ['event', editId] });
+      navigation.goBack();
+    },
+  });
+
   const onSubmit = (data: any) => {
-    if (selectedItems.length === 0) {
-      alert('Please select at least one item from the inventory.');
-      return;
-    }
     saveEventMutation.mutate(data);
   };
 
@@ -439,44 +452,7 @@ export const EventFormScreen: React.FC = () => {
             {/* Live Financial Summaries */}
             <View style={styles.billSummarySection}>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Subtotal</Text>
-                <Text style={styles.summaryValue}>{formatCurrency(liveTotalAmount)}</Text>
-              </View>
-
-              <Controller
-                control={control}
-                name="paidAmount"
-                rules={{
-                  validate: (v) => !isNaN(parseFloat(v)) && parseFloat(v) >= 0 || 'Enter valid paid amount',
-                }}
-                render={({ field: { onChange, onBlur, value } }) => (
-                  <View style={[styles.inputContainer, { marginTop: 12 }]}>
-                    <TextInput
-                      label="Advance Paid Amount (₹)"
-                      keyboardType="numeric"
-                      mode="outlined"
-                      onBlur={onBlur}
-                      onChangeText={onChange}
-                      value={value}
-                      outlineColor={themeColors.border}
-                      activeOutlineColor={themeColors.primary}
-                      error={!!errors.paidAmount}
-                      style={styles.input}
-                      left={<TextInput.Affix text="₹ " />}
-                    />
-                    {errors.paidAmount && (
-                      <HelperText type="error" visible={true}>
-                        {errors.paidAmount.message}
-                      </HelperText>
-                    )}
-                  </View>
-                )}
-              />
-
-              <View style={styles.cardDivider} />
-
-              <View style={styles.summaryRow}>
-                <Text style={[styles.summaryLabel, { fontWeight: 'bold' }]}>Grand Total Bill</Text>
+                <Text style={[styles.summaryLabel, { fontWeight: 'bold' }]}>Total Bill</Text>
                 <Text style={[styles.summaryValue, { fontWeight: 'bold', color: themeColors.primary }]}>
                   {formatCurrency(liveTotalAmount)}
                 </Text>
@@ -512,18 +488,55 @@ export const EventFormScreen: React.FC = () => {
               {editId ? 'UPDATE BOOKING' : 'CREATE BOOKING'}
             </PrimaryButton>
 
-            {editId && isFromLogin && !originalIsClosed && (
+            {editId && isAdmin && !originalIsClosed && originalStatusId === 1 && (
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+                <Button
+                  mode="contained"
+                  onPress={() => updateStatusMutation.mutate(2)}
+                  buttonColor={themeColors.success}
+                  icon="check-circle-outline"
+                  style={{ flex: 1 }}
+                  loading={updateStatusMutation.isPending}
+                  disabled={saveEventMutation.isPending || closeEventMutation.isPending}
+                >
+                  APPROVE EVENT
+                </Button>
+                <Button
+                  mode="contained"
+                  onPress={() => updateStatusMutation.mutate(4)}
+                  buttonColor={themeColors.error}
+                  icon="close-circle-outline"
+                  style={{ flex: 1 }}
+                  loading={updateStatusMutation.isPending}
+                  disabled={saveEventMutation.isPending || closeEventMutation.isPending}
+                >
+                  CANCEL EVENT
+                </Button>
+              </View>
+            )}
+
+            {editId && isAdmin && !originalIsClosed && originalStatusId === 3 && (
               <Button
                 mode="contained"
                 onPress={() => setCloseDialogVisible(true)}
                 buttonColor={themeColors.error}
                 icon="lock-outline"
                 style={{ marginTop: 12 }}
-                disabled={saveEventMutation.isPending || closeEventMutation.isPending}
+                disabled={saveEventMutation.isPending || closeEventMutation.isPending || updateStatusMutation.isPending}
               >
-                CLOSE & LOCK BILL
+                CLOSE & LOCK EVENT
               </Button>
             )}
+
+            <Button
+              mode="outlined"
+              onPress={() => navigation.goBack()}
+              textColor={themeColors.textMuted}
+              style={{ marginTop: 12 }}
+              disabled={saveEventMutation.isPending || closeEventMutation.isPending || updateStatusMutation.isPending}
+            >
+              BACk
+            </Button>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

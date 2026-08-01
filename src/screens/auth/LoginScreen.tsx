@@ -16,6 +16,9 @@ import { RootStackParamList } from '../../navigation/types';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'Login'>;
 
+const DEMO_MOBILE = process.env.EXPO_PUBLIC_DEMO_MOBILE || '9999999999';
+const DEMO_PASSWORD = process.env.EXPO_PUBLIC_DEMO_PASSWORD || '76426707';
+
 export const LoginScreen: React.FC = () => {
   const dispatch = useDispatch();
   const navigation = useNavigation<NavigationProp>();
@@ -39,7 +42,7 @@ export const LoginScreen: React.FC = () => {
     }
   }, [rememberedMobile]);
 
-  const onSubmit = async (data: any) => {
+  const performLogin = async (data: { mobileNumber: string; password: string }) => {
     setLoading(true);
     setErrorMsg(null);
     try {
@@ -56,19 +59,6 @@ export const LoginScreen: React.FC = () => {
         token = response.data.token || response.data.accessToken || response.data.jwtToken || response.data.jwt;
       }
 
-      const rawUser = (response.data && typeof response.data === 'object') ? (response.data.user || response.data.admin || response.data) : null;
-      const userFullName = rawUser?.fullName || rawUser?.name || 'Samaj Admin';
-      const userEmail = rawUser?.email || rawUser?.emailAddress || '';
-      const userMobile = rawUser?.mobileNumber || rawUser?.mobile || rawUser?.phone || data.mobileNumber;
-
-      const finalUser = {
-        userId: Number(rawUser?.userId || rawUser?.id || 1),
-        fullName: userFullName,
-        email: userEmail,
-        mobileNumber: userMobile,
-        isActive: rawUser?.isActive !== undefined ? rawUser.isActive : (rawUser?.active !== undefined ? rawUser.active : true),
-      };
-
       if (!token) {
         throw new Error('Authentication failed: JWT Token is missing in server response.');
       }
@@ -76,8 +66,51 @@ export const LoginScreen: React.FC = () => {
       // Store JWT Token in AsyncStorage
       await AsyncStorage.setItem('jwt_token', token);
 
-      // Save User Login State in Redux
-      dispatch(setCredentials({ token, user: finalUser, isFromLogin: true }));
+      // Save initial token into Redux so interceptor picks up Bearer token
+      dispatch(setCredentials({ token, user: null as any, isAdmin: false }));
+
+      let fetchedUser = {
+        userId: 1,
+        fullName: 'Patel Samaj',
+        email: '',
+        mobileNumber: data.mobileNumber,
+        isActive: true,
+        roleName: '',
+      };
+
+      let computedIsAdmin = false;
+
+      try {
+        const userRes = await apiClient.get('/user', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const uData = userRes.data;
+        if (uData && typeof uData === 'object') {
+          const roleName = uData.roleName || uData.role || (Array.isArray(uData.roles) ? uData.roles[0] : uData.roles) || '';
+
+          fetchedUser = {
+            userId: Number(uData.userId || uData.id || 1),
+            fullName: uData.fullName || fetchedUser.fullName,
+            email: uData.email || '',
+            mobileNumber: uData.mobileNumber || data.mobileNumber,
+            isActive: uData.isActive !== undefined ? uData.isActive : true,
+            roleName: typeof roleName === 'string' ? roleName : String(roleName),
+          };
+
+          // Set isAdmin flag based on response value (isAdmin property or roleName === 'ADMIN')
+          if (uData.isAdmin !== undefined) {
+            computedIsAdmin = Boolean(uData.isAdmin);
+          } else if (roleName) {
+            const roleUpper = String(roleName).toUpperCase().trim();
+            computedIsAdmin = (roleUpper === 'ADMIN');
+          }
+        }
+      } catch (e) {
+        // Fallback user details if /user endpoint fails
+      }
+
+      // 4. Save User Credentials & Role details in Redux
+      dispatch(setCredentials({ token, user: fetchedUser, isAdmin: computedIsAdmin }));
 
       // Manage Remember Login
       if (rememberMe) {
@@ -97,27 +130,13 @@ export const LoginScreen: React.FC = () => {
       setLoading(false);
     }
   };
+
+  const onSubmit = (data: any) => performLogin(data);
+
   const handleDemoBypass = async () => {
-    const mockUser = {
-      userId: 1,
-      fullName: 'Patel Samaj',
-      email: '',
-      mobileNumber: '',
-      isActive: true,
-    };
-    try {
-      await AsyncStorage.setItem('jwt_token', 'demo-jwt-token-value');
-    } catch (e) {
-      // Ignore
-    }
-    dispatch(setCredentials({
-      token: 'demo-jwt-token-value',
-      user: mockUser,
-      isFromLogin: false,
-    }));
-    navigation.reset({
-      index: 0,
-      routes: [{ name: 'MainTabs' }],
+    await performLogin({
+      mobileNumber: DEMO_MOBILE,
+      password: DEMO_PASSWORD,
     });
   };
 

@@ -31,8 +31,7 @@ export const InventoryListScreen: React.FC = () => {
   const [bannerVisible, setBannerVisible] = useState(true);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  const isFromLogin = useSelector((state: RootState) => state.auth.isFromLogin);
-  const isAdmin = isFromLogin === true;
+  const isAdmin = useSelector((state: RootState) => state.auth.isAdmin);
 
   // Fetch Items Query
   const { data: items = [], isLoading, refetch } = useQuery<Item[]>({

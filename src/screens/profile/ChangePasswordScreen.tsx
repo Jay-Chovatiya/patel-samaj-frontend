@@ -16,8 +16,7 @@ import { ChangePasswordDTO } from '../../types';
 export const ChangePasswordScreen: React.FC = () => {
   const navigation = useNavigation();
   
-  const isFromLogin = useSelector((state: RootState) => state.auth.isFromLogin);
-  const isAdmin = isFromLogin === true;
+  const isAdmin = useSelector((state: RootState) => state.auth.isAdmin);
 
   const [secureOld, setSecureOld] = useState(true);
   const [secureNew, setSecureNew] = useState(true);

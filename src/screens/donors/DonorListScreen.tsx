@@ -25,8 +25,7 @@ export const DonorListScreen: React.FC = () => {
   const [search, setSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
-  const isFromLogin = useSelector((state: RootState) => state.auth.isFromLogin);
-  const isAdmin = isFromLogin === true;
+  const isAdmin = useSelector((state: RootState) => state.auth.isAdmin);
 
   // TanStack Query for Donors
   const { data: donors = [], isLoading, refetch } = useQuery<Donor[]>({

@@ -18,8 +18,14 @@ apiClient.interceptors.request.use(
     const state = store.getState();
     const token = state.auth?.token;
 
-    // Set Authorization header for all requests if token exists
-    if (token && config.method) {
+    const isPublic = config.url && (
+      config.url.includes('/auth/login') || 
+      config.url.includes('/auth/logout') || 
+      config.url.includes('/auth/forgot-password')
+    );
+
+    // Set Authorization header for all non-public requests if token exists
+    if (!isPublic && token && config.method) {
       if (config.headers) {
         if (typeof config.headers.set === 'function') {
           config.headers.set('Authorization', `Bearer ${token}`);
