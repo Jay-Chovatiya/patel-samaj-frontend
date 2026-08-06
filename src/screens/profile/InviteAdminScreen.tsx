@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
-import { TextInput, HelperText, Snackbar } from 'react-native-paper';
+import { TextInput, HelperText, Snackbar, Button } from 'react-native-paper';
 import { useForm, Controller } from 'react-hook-form';
 import { useNavigation } from '@react-navigation/native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -160,13 +160,24 @@ export const InviteAdminScreen: React.FC = () => {
               )}
             />
 
-            <PrimaryButton
-              onPress={handleSubmit(onSubmit)}
-              loading={inviteAdminMutation.isPending}
-              style={styles.saveBtn}
-            >
-              SEND INVITATION
-            </PrimaryButton>
+            <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 16 }}>
+              <Button
+                mode="outlined"
+                onPress={() => navigation.goBack()}
+                textColor={themeColors.textMuted}
+                style={{ borderRadius: 8, height: 48, justifyContent: 'center', borderColor: themeColors.border, paddingHorizontal: 16, minWidth: 120 }}
+                disabled={inviteAdminMutation.isPending}
+              >
+                CANCEL
+              </Button>
+              <PrimaryButton
+                onPress={handleSubmit(onSubmit)}
+                loading={inviteAdminMutation.isPending}
+                style={{ marginVertical: 0, minWidth: 140 }}
+              >
+                SEND INVITATION
+              </PrimaryButton>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect} from 'react';
 import { StyleSheet, View, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
-import { Text, TextInput, HelperText } from 'react-native-paper';
+import { TextInput, HelperText, Button } from 'react-native-paper';
 import { useForm, Controller } from 'react-hook-form';
 import { useNavigation } from '@react-navigation/native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -217,13 +217,24 @@ export const EditProfileScreen: React.FC = () => {
               )}
             />
 
-            <PrimaryButton
-              onPress={handleSubmit(onSubmit)}
-              loading={updateProfileMutation.isPending}
-              style={styles.saveBtn}
-            >
-              SAVE CHANGES
-            </PrimaryButton>
+            <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 16 }}>
+              <Button
+                mode="outlined"
+                onPress={() => navigation.goBack()}
+                textColor={themeColors.textMuted}
+                style={{ borderRadius: 8, height: 48, justifyContent: 'center', borderColor: themeColors.border, paddingHorizontal: 16, minWidth: 120 }}
+                disabled={updateProfileMutation.isPending}
+              >
+                CANCEL
+              </Button>
+              <PrimaryButton
+                onPress={handleSubmit(onSubmit)}
+                loading={updateProfileMutation.isPending}
+                style={{ marginVertical: 0, minWidth: 140 }}
+              >
+                SAVE CHANGES
+              </PrimaryButton>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

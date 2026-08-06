@@ -5,20 +5,18 @@ import { useForm, Controller } from 'react-hook-form';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-
-import { useSelector } from 'react-redux';
 import { themeColors } from '../../theme';
 import { AppHeader } from '../../components/AppHeader';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { DatePicker } from '../../components/DatePicker';
 import { BottomSheet } from '../../components/BottomSheet';
 import { ConfirmationDialog } from '../../components/ConfirmationDialog';
-import { RootState } from '../../store';
 import { RootStackParamList } from '../../navigation/types';
 import apiClient from '../../api/client';
+import { inventoryApi } from '../../api/services/inventoryApi';
+import { eventApi } from '../../api/services/eventApi';
 import { formatCurrency } from '../../utils/format';
-import { Item, EventItem, Event } from '../../types';
+import { Item, EventStatus, Event } from '../../types';
 
 type RoutePropType = RouteProp<RootStackParamList, 'EventForm'>;
 type NavigationProp = StackNavigationProp<RootStackParamList>;
@@ -35,7 +33,6 @@ export const EventFormScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const queryClient = useQueryClient();
   const editId = route.params?.id;
-  const isAdmin = useSelector((state: RootState) => state.auth.isAdmin);
 
   const [selectedItems, setSelectedItems] = useState<SelectedItemState[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
@@ -47,10 +44,7 @@ export const EventFormScreen: React.FC = () => {
   // Fetch Available Inventory Items
   const { data: inventoryItems = [] } = useQuery<Item[]>({
     queryKey: ['items'],
-    queryFn: async () => {
-      const res = await apiClient.get('/items');
-      return res.data;
-    },
+    queryFn: () => inventoryApi.getItems(),
   });
 
   const { control, handleSubmit, setValue, reset, formState: { errors } } = useForm({
@@ -59,7 +53,8 @@ export const EventFormScreen: React.FC = () => {
       contactNumber: '',
       email: '',
       eventType: '',
-      eventDate: new Date(),
+      startDate: new Date(),
+      endDate: new Date(),
       remarks: '',
       paidAmount: '0',
     },
@@ -74,15 +69,18 @@ export const EventFormScreen: React.FC = () => {
       const fetchEvent = async () => {
         setLoadingInitial(true);
         try {
-          const res = await apiClient.get(`/events/${editId}`);
-          const event: Event = res.data;
+          const event: Event = await eventApi.getEventById(editId);
+
+          const stDate = event.startDate ? new Date(event.startDate) : new Date();
+          const enDate = event.endDate ? new Date(event.endDate) : stDate;
 
           reset({
             familyHeadName: event.familyHeadName,
             contactNumber: event.contactNumber,
             email: event.email || '',
             eventType: event.eventType,
-            eventDate: new Date(event.eventDate),
+            startDate: stDate,
+            endDate: enDate,
             remarks: event.remarks || '',
             paidAmount: event.paidAmount?.toString() || '0',
           });
@@ -117,7 +115,8 @@ export const EventFormScreen: React.FC = () => {
         contactNumber: formData.contactNumber,
         email: formData.email,
         eventType: formData.eventType,
-        eventDate: formData.eventDate.toISOString(),
+        startDate: formData.startDate.toISOString(),
+        endDate: formData.endDate ? formData.endDate.toISOString() : null,
         remarks: formData.remarks,
         paidAmount: parseFloat(formData.paidAmount || '0'),
         totalAmount: liveTotalAmount,
@@ -128,15 +127,15 @@ export const EventFormScreen: React.FC = () => {
           priceAtBooking: item.price,
         })),
         isClosed: editId ? originalIsClosed : false,
-        statusId: editId ? originalStatusId : 1,
+        statusId: editId ? originalStatusId : EventStatus.PENDING,
       };
 
       if (editId) {
         // PUT for editing
-        return (await apiClient.put('/events', payload)).data;
+        return await eventApi.updateEvent(payload);
       } else {
         // POST for creation
-        return (await apiClient.post('/events', payload)).data;
+        return await eventApi.createEvent(payload);
       }
     },
     onSuccess: () => {
@@ -152,8 +151,7 @@ export const EventFormScreen: React.FC = () => {
   const closeEventMutation = useMutation({
     mutationFn: async () => {
       if (!editId) return;
-      const response = await apiClient.put(`/events/close/${editId}`);
-      return response.data;
+      return await eventApi.closeEvent(editId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['events'] });
@@ -167,11 +165,10 @@ export const EventFormScreen: React.FC = () => {
   const updateStatusMutation = useMutation({
     mutationFn: async (newStatusId: number) => {
       if (!editId) return;
-      const response = await apiClient.put('/events', {
+      return await eventApi.updateEvent({
         eventId: parseInt(editId, 10),
         statusId: newStatusId,
       });
-      return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['events'] });
@@ -381,12 +378,27 @@ export const EventFormScreen: React.FC = () => {
 
             <Controller
               control={control}
-              name="eventDate"
+              name="startDate"
               render={({ field: { onChange, value } }) => (
                 <DatePicker
                   date={value}
+                  onChange={(selectedDate: Date) => {
+                    onChange(selectedDate);
+                    setValue('endDate', selectedDate);
+                  }}
+                  label="Start Date"
+                />
+              )}
+            />
+
+            <Controller
+              control={control}
+              name="endDate"
+              render={({ field: { onChange, value } }) => (
+                <DatePicker
+                  date={value || new Date()}
                   onChange={onChange}
-                  label="Event Date"
+                  label="End Date"
                 />
               )}
             />
@@ -480,63 +492,25 @@ export const EventFormScreen: React.FC = () => {
               )}
             />
 
-            <PrimaryButton
-              onPress={handleSubmit(onSubmit)}
-              loading={saveEventMutation.isPending || loadingInitial}
-              style={styles.saveBtn}
-            >
-              {editId ? 'UPDATE BOOKING' : 'CREATE BOOKING'}
-            </PrimaryButton>
-
-            {editId && isAdmin && !originalIsClosed && originalStatusId === 1 && (
-              <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-                <Button
-                  mode="contained"
-                  onPress={() => updateStatusMutation.mutate(2)}
-                  buttonColor={themeColors.success}
-                  icon="check-circle-outline"
-                  style={{ flex: 1 }}
-                  loading={updateStatusMutation.isPending}
-                  disabled={saveEventMutation.isPending || closeEventMutation.isPending}
-                >
-                  APPROVE EVENT
-                </Button>
-                <Button
-                  mode="contained"
-                  onPress={() => updateStatusMutation.mutate(4)}
-                  buttonColor={themeColors.error}
-                  icon="close-circle-outline"
-                  style={{ flex: 1 }}
-                  loading={updateStatusMutation.isPending}
-                  disabled={saveEventMutation.isPending || closeEventMutation.isPending}
-                >
-                  CANCEL EVENT
-                </Button>
-              </View>
-            )}
-
-            {editId && isAdmin && !originalIsClosed && originalStatusId === 3 && (
+            <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 16 }}>
               <Button
-                mode="contained"
-                onPress={() => setCloseDialogVisible(true)}
-                buttonColor={themeColors.error}
-                icon="lock-outline"
-                style={{ marginTop: 12 }}
-                disabled={saveEventMutation.isPending || closeEventMutation.isPending || updateStatusMutation.isPending}
+                mode="outlined"
+                onPress={() => navigation.goBack()}
+                textColor={themeColors.textMuted}
+                style={{ borderRadius: 8, height: 48, justifyContent: 'center', borderColor: themeColors.border, paddingHorizontal: 16, minWidth: 120 }}
+                disabled={saveEventMutation.isPending || loadingInitial}
               >
-                CLOSE & LOCK EVENT
+                CANCEL
               </Button>
-            )}
+              <PrimaryButton
+                onPress={handleSubmit(onSubmit)}
+                loading={saveEventMutation.isPending || loadingInitial}
+                style={{ marginVertical: 0, minWidth: 140 }}
+              >
+                {editId ? 'UPDATE BOOKING' : 'CREATE BOOKING'}
+              </PrimaryButton>
+            </View>
 
-            <Button
-              mode="outlined"
-              onPress={() => navigation.goBack()}
-              textColor={themeColors.textMuted}
-              style={{ marginTop: 12 }}
-              disabled={saveEventMutation.isPending || closeEventMutation.isPending || updateStatusMutation.isPending}
-            >
-              BACk
-            </Button>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

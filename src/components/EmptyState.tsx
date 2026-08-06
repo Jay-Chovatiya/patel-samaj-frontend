@@ -63,7 +63,9 @@ const styles = StyleSheet.create({
   },
   button: {
     borderRadius: 8,
-    paddingHorizontal: 8,
+    alignSelf: 'center',
+    paddingHorizontal: 20,
+    minWidth: 160,
   },
 });
 

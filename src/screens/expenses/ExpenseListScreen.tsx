@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, FlatList, RefreshControl } from 'react-native';
-import { Text, FAB, IconButton } from 'react-native-paper';
+import { Text, FAB } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useQuery } from '@tanstack/react-query';
@@ -13,39 +13,45 @@ import { SearchBar } from '../../components/SearchBar';
 import { ReusableCard } from '../../components/ReusableCard';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { EmptyState } from '../../components/EmptyState';
+import { PaginationControl } from '../../components/PaginationControl';
 import { RootStackParamList } from '../../navigation/types';
-import apiClient from '../../api/client';
+import { expenseApi } from '../../api/services/expenseApi';
 import { formatCurrency, formatDate } from '../../utils/format';
-import { Expense } from '../../types';
+import { useDebounce } from '../../hooks/useDebounce';
+import { Expense, PageResponse } from '../../types';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
 
 export const ExpenseListScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 500);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(5);
   const [refreshing, setRefreshing] = useState(false);
 
   const isAdmin = useSelector((state: RootState) => state.auth.isAdmin);
 
-  // Fetch Expenses
-  const { data: expenses = [], isLoading, refetch } = useQuery<Expense[]>({
-    queryKey: ['expenses'],
-    queryFn: async () => {
-      const res = await apiClient.get('/expenses');
-      return res.data || [];
-    },
+  // Fetch Expenses via expenseApi with debounced search
+  const { data: pageData, isLoading, refetch } = useQuery<PageResponse<Expense>>({
+    queryKey: ['expenses', debouncedSearch, page, pageSize],
+    queryFn: () => expenseApi.getExpenses({ search: debouncedSearch, page, size: pageSize }),
   });
+
+  const expenses = pageData?.content || [];
+  const totalPages = pageData?.totalPages || 1;
+  const totalElements = pageData?.totalElements || expenses.length;
+
+  const handleSearchChange = (text: string) => {
+    setSearch(text);
+    setPage(0);
+  };
 
   const handleRefresh = async () => {
     setRefreshing(true);
     await refetch();
     setRefreshing(false);
   };
-
-  const filteredExpenses = expenses.filter((e) =>
-    (e.description && e.description.toLowerCase().includes(search.toLowerCase())) ||
-    (e.category && e.category.toLowerCase().includes(search.toLowerCase()))
-  );
 
   return (
     <View style={styles.container}>
@@ -59,7 +65,7 @@ export const ExpenseListScreen: React.FC = () => {
         <SearchBar
           placeholder="Search expenses by name or category..."
           value={search}
-          onChangeText={setSearch}
+          onChangeText={handleSearchChange}
         />
       </View>
 
@@ -67,7 +73,7 @@ export const ExpenseListScreen: React.FC = () => {
         <LoadingSpinner />
       ) : (
         <FlatList
-          data={filteredExpenses}
+          data={expenses}
           keyExtractor={(item) => String(item.expenseId)}
           contentContainerStyle={styles.listContainer}
           refreshControl={
@@ -95,6 +101,21 @@ export const ExpenseListScreen: React.FC = () => {
               </View>
             </ReusableCard>
           )}
+          ListFooterComponent={
+            expenses.length > 0 ? (
+              <PaginationControl
+                page={page}
+                totalPages={totalPages}
+                totalElements={totalElements}
+                pageSize={pageSize}
+                onPageChange={setPage}
+                onPageSizeChange={(newSize) => {
+                  setPageSize(newSize);
+                  setPage(0);
+                }}
+              />
+            ) : null
+          }
           ListEmptyComponent={
             <EmptyState
               icon="cash-remove"
@@ -168,7 +189,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     margin: 16,
     right: 0,
-    bottom: 16,
+    bottom: 70,
   },
 });
 

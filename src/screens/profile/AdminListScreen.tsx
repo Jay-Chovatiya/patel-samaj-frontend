@@ -1,62 +1,63 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, FlatList, RefreshControl } from 'react-native';
-import { Text, Switch, FAB, IconButton, Badge } from 'react-native-paper';
+import { Text, Switch, FAB, Badge } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { themeColors } from '../../theme';
 import { AppHeader } from '../../components/AppHeader';
+import { SearchBar } from '../../components/SearchBar';
 import { ReusableCard } from '../../components/ReusableCard';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { EmptyState } from '../../components/EmptyState';
+import { PaginationControl } from '../../components/PaginationControl';
 import { RootStackParamList } from '../../navigation/types';
-import apiClient from '../../api/client';
-import { UserDTO } from '../../types';
+import { userApi } from '../../api/services/userApi';
+import { useDebounce } from '../../hooks/useDebounce';
+import { UserDTO, PageResponse } from '../../types';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
 
 export const AdminListScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const queryClient = useQueryClient();
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 500);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(5);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Fetch all admins (UserDTO)
-  const { data: admins = [], isLoading, refetch } = useQuery<UserDTO[]>({
-    queryKey: ['admins'],
-    queryFn: async () => {
-      const res = await apiClient.get('/user/all');
-      const list = res.data || [];
-      return list.map((item: any) => ({
-        userId: item.userId || item.id || 0,
-        fullName: item.fullName || item.name || '',
-        mobileNumber: item.mobileNumber || item.phone || '',
-        isActive: item.isActive !== undefined ? item.isActive : (item.active !== undefined ? item.active : true),
-      }));
-    },
+  // Fetch admins via userApi with debounced search
+  const { data: rawData, isLoading, refetch } = useQuery<UserDTO[] | PageResponse<UserDTO>>({
+    queryKey: ['admins', debouncedSearch, page, pageSize],
+    queryFn: () => userApi.getAllUsers({ search: debouncedSearch, page, size: pageSize }),
   });
+
+  const adminsData: UserDTO[] = Array.isArray(rawData) ? rawData : (rawData?.content || []);
+  const totalPages = (rawData as PageResponse<UserDTO>)?.totalPages || 1;
+  const totalElements = (rawData as PageResponse<UserDTO>)?.totalElements || adminsData.length;
+
+  const admins = adminsData.map((item: any) => ({
+    userId: item.userId || item.id || 0,
+    fullName: item.fullName || item.name || '',
+    mobileNumber: item.mobileNumber || item.phone || '',
+    isActive: item.isActive !== undefined ? item.isActive : (item.active !== undefined ? item.active : true),
+  }));
 
   // Toggle Admin Status Mutation
   const toggleMutation = useMutation({
-    mutationFn: async (userId: number) => {
-      let resData: any;
-      try {
-        resData = (await apiClient.put(`/user/toggle/${userId}`)).data;
-      } catch (err: any) {
-        if (err?.response?.status === 404 || err?.response?.status === 405) {
-          resData = (await apiClient.post(`/user/toggle/${userId}`)).data;
-        } else {
-          throw err;
-        }
-      }
-      return resData;
-    },
+    mutationFn: (userId: number) => userApi.toggleUserStatus(userId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admins'] });
       queryClient.invalidateQueries({ queryKey: ['user-profile'] });
     },
   });
+
+  const handleSearchChange = (text: string) => {
+    setSearch(text);
+    setPage(0);
+  };
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -71,6 +72,14 @@ export const AdminListScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <AppHeader title="Admin Management" showBack={true} onBack={() => navigation.goBack()} />
+
+      <View style={styles.searchSection}>
+        <SearchBar
+          placeholder="Search admins by name..."
+          value={search}
+          onChangeText={handleSearchChange}
+        />
+      </View>
 
       {isLoading ? (
         <LoadingSpinner />
@@ -116,11 +125,26 @@ export const AdminListScreen: React.FC = () => {
               </View>
             </ReusableCard>
           )}
+          ListFooterComponent={
+            admins.length > 0 ? (
+              <PaginationControl
+                page={page}
+                totalPages={totalPages}
+                totalElements={totalElements}
+                pageSize={pageSize}
+                onPageChange={setPage}
+                onPageSizeChange={(newSize) => {
+                  setPageSize(newSize);
+                  setPage(0);
+                }}
+              />
+            ) : null
+          }
           ListEmptyComponent={
             <EmptyState
               icon="account-group"
               title="No Admins Found"
-              description="There are no other admin profiles in the system."
+              description={search ? "No admin profile matched your search." : "There are no other admin profiles in the system."}
               actionLabel="Invite Admin"
               onAction={() => navigation.navigate('InviteAdmin')}
             />
@@ -144,6 +168,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: themeColors.background,
   },
+  searchSection: {
+    padding: 12,
+    backgroundColor: themeColors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: themeColors.border,
+  },
   listContainer: {
     paddingVertical: 12,
     paddingBottom: 88,
@@ -166,20 +196,9 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 2,
   },
-  email: {
-    color: themeColors.textMuted,
-    fontSize: 13,
-    marginTop: 2,
-  },
   badgeRow: {
     flexDirection: 'row',
     marginTop: 8,
-  },
-  roleBadge: {
-    backgroundColor: themeColors.navyLight,
-    color: themeColors.secondary,
-    marginRight: 6,
-    paddingHorizontal: 6,
   },
   statusBadge: {
     paddingHorizontal: 6,
@@ -198,7 +217,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     margin: 16,
     right: 0,
-    bottom: 16,
+    bottom: 70,
   },
 });
 

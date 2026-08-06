@@ -52,3 +52,13 @@ export const formatCurrency = (amount: number): string => {
     return `₹${amount.toFixed(2)}`;
   }
 };
+
+export const ensureArray = <T = any>(data: any): T[] => {
+  if (Array.isArray(data)) return data;
+  if (data && typeof data === 'object') {
+    if (Array.isArray(data.content)) return data.content;
+    if (Array.isArray(data.data)) return data.data;
+    if (Array.isArray(data.items)) return data.items;
+  }
+  return [];
+};

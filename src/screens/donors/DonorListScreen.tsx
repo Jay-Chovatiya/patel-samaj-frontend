@@ -13,39 +13,45 @@ import { SearchBar } from '../../components/SearchBar';
 import { ReusableCard } from '../../components/ReusableCard';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { EmptyState } from '../../components/EmptyState';
+import { PaginationControl } from '../../components/PaginationControl';
 import { RootStackParamList } from '../../navigation/types';
-import apiClient from '../../api/client';
+import { donorApi } from '../../api/services/donorApi';
 import { formatCurrency, formatDate } from '../../utils/format';
-import { Donor } from '../../types';
+import { useDebounce } from '../../hooks/useDebounce';
+import { Donor, PageResponse } from '../../types';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
 
 export const DonorListScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 500);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(5);
   const [refreshing, setRefreshing] = useState(false);
 
   const isAdmin = useSelector((state: RootState) => state.auth.isAdmin);
 
-  // TanStack Query for Donors
-  const { data: donors = [], isLoading, refetch } = useQuery<Donor[]>({
-    queryKey: ['donors'],
-    queryFn: async () => {
-      const res = await apiClient.get('/donors');
-      return res.data || [];
-    },
+  // Query Donors via donorApi with debounced search
+  const { data: pageData, isLoading, refetch } = useQuery<PageResponse<Donor>>({
+    queryKey: ['donors', debouncedSearch, page, pageSize],
+    queryFn: () => donorApi.getDonors({ search: debouncedSearch, page, size: pageSize }),
   });
+
+  const donors = pageData?.content || [];
+  const totalPages = pageData?.totalPages || 1;
+  const totalElements = pageData?.totalElements || donors.length;
+
+  const handleSearchChange = (text: string) => {
+    setSearch(text);
+    setPage(0);
+  };
 
   const handleRefresh = async () => {
     setRefreshing(true);
     await refetch();
     setRefreshing(false);
   };
-
-  const filteredDonors = donors.filter((d) =>
-    d.fullName.toLowerCase().includes(search.toLowerCase()) ||
-    (d.remarks && d.remarks.toLowerCase().includes(search.toLowerCase()))
-  );
 
   return (
     <View style={styles.container}>
@@ -55,7 +61,7 @@ export const DonorListScreen: React.FC = () => {
         <SearchBar
           placeholder="Search donors by name..."
           value={search}
-          onChangeText={setSearch}
+          onChangeText={handleSearchChange}
         />
       </View>
 
@@ -63,7 +69,7 @@ export const DonorListScreen: React.FC = () => {
         <LoadingSpinner />
       ) : (
         <FlatList
-          data={filteredDonors}
+          data={donors}
           keyExtractor={(item) => String(item.donorId)}
           contentContainerStyle={styles.listContainer}
           refreshControl={
@@ -87,14 +93,29 @@ export const DonorListScreen: React.FC = () => {
                 <Text variant="bodyMedium" style={styles.dateLabel}>
                   Donated on: {formatDate(item.donationDate)}
                 </Text>
-                {item.remarks && (
+                {item.remarks !== null && item.remarks !== undefined && item.remarks.trim() !== '' ? (
                   <Text variant="bodySmall" style={styles.remarksLabel} numberOfLines={1}>
-                    "{item.remarks}"
+                    {`"${item.remarks}"`}
                   </Text>
-                )}
+                ) : null}
               </View>
             </ReusableCard>
           )}
+          ListFooterComponent={
+            donors.length > 0 ? (
+              <PaginationControl
+                page={page}
+                totalPages={totalPages}
+                totalElements={totalElements}
+                pageSize={pageSize}
+                onPageChange={setPage}
+                onPageSizeChange={(newSize) => {
+                  setPageSize(newSize);
+                  setPage(0);
+                }}
+              />
+            ) : null
+          }
           ListEmptyComponent={
             <EmptyState
               icon="hand-heart-outline"
@@ -133,7 +154,7 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     paddingVertical: 12,
-    paddingBottom: 88, // Ensure space for FAB
+    paddingBottom: 88,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -166,7 +187,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     margin: 16,
     right: 0,
-    bottom: 16,
+    bottom: 70,
   },
 });
 

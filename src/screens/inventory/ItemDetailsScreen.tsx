@@ -139,7 +139,7 @@ export const ItemDetailsScreen: React.FC = () => {
               onPress={() => navigation.navigate('ItemForm', { id: String(item.itemId) })}
               buttonColor={themeColors.primary}
               icon="pencil"
-              style={[styles.btn, { flex: 1, marginRight: 8 }]}
+              style={styles.btn}
             >
               Edit Item
             </Button>
@@ -149,7 +149,7 @@ export const ItemDetailsScreen: React.FC = () => {
               onPress={() => setDeleteVisible(true)}
               textColor={themeColors.error}
               icon="delete"
-              style={[styles.btn, { flex: 1, marginLeft: 8, borderColor: themeColors.error }]}
+              style={[styles.btn, { borderColor: themeColors.error }]}
             >
               Delete Item
             </Button>
@@ -248,12 +248,17 @@ const styles = StyleSheet.create({
   },
   btnRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    gap: 12,
+    marginTop: 16,
   },
   btn: {
     borderRadius: 8,
     height: 48,
     justifyContent: 'center',
+    alignSelf: 'center',
+    paddingHorizontal: 16,
+    minWidth: 130,
   },
   errorContainer: {
     flex: 1,

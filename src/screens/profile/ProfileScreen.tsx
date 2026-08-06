@@ -292,6 +292,10 @@ const styles = StyleSheet.create({
   logoutBtn: {
     borderRadius: 8,
     justifyContent: 'center',
+    alignSelf: 'center',
+    marginVertical: 16,
+    paddingHorizontal: 24,
+    minWidth: 160,
   },
 });
 

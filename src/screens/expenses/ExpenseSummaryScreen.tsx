@@ -9,7 +9,7 @@ import { useNavigation } from '@react-navigation/native';
 import { themeColors, shadows } from '../../theme';
 import { AppHeader } from '../../components/AppHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
-import apiClient from '../../api/client';
+import { expenseApi } from '../../api/services/expenseApi';
 import { formatCurrency, formatDate } from '../../utils/format';
 import { Expense, DailyExpenseSummary } from '../../types';
 
@@ -20,17 +20,14 @@ export const ExpenseSummaryScreen: React.FC = () => {
   const { data: expenses = [], isLoading: loadingExpenses } = useQuery<Expense[]>({
     queryKey: ['expenses'],
     queryFn: async () => {
-      const res = await apiClient.get('/expenses');
-      return res.data || [];
+      const res = await expenseApi.getExpenses({ search: '', page: 0, size: 100 });
+      return (res as any)?.content || res || [];
     },
   });
 
   const { data: dailySummaries = [], isLoading: loadingDaily } = useQuery<DailyExpenseSummary[]>({
     queryKey: ['expenses-daily'],
-    queryFn: async () => {
-      const res = await apiClient.get('/expenses/daily-summary');
-      return res.data || [];
-    },
+    queryFn: () => expenseApi.getDailySummary(),
   });
 
   if (loadingExpenses || loadingDaily) {

@@ -17,6 +17,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { ConfirmationDialog } from '../../components/ConfirmationDialog';
 import { RootStackParamList } from '../../navigation/types';
 import apiClient from '../../api/client';
+import { inventoryApi } from '../../api/services/inventoryApi';
 import { formatCurrency } from '../../utils/format';
 import { Item } from '../../types';
 
@@ -36,18 +37,12 @@ export const InventoryListScreen: React.FC = () => {
   // Fetch Items Query
   const { data: items = [], isLoading, refetch } = useQuery<Item[]>({
     queryKey: ['items'],
-    queryFn: async () => {
-      const res = await apiClient.get('/items');
-      return res.data || [];
-    },
+    queryFn: () => inventoryApi.getItems(),
   });
 
   // Soft Delete Mutation
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const response = await apiClient.delete(`/items/${id}`);
-      return response.data;
-    },
+    mutationFn: (id: string) => inventoryApi.deleteItem(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['items'] });
       setDeleteId(null);

@@ -7,28 +7,34 @@ import { useQuery } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-import { themeColors, shadows } from '../../theme';
+import { themeColors } from '../../theme';
 import { AppHeader } from '../../components/AppHeader';
+import { SearchBar } from '../../components/SearchBar';
 import { ReusableCard } from '../../components/ReusableCard';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { EmptyState } from '../../components/EmptyState';
+import { PaginationControl } from '../../components/PaginationControl';
 import { RootStackParamList } from '../../navigation/types';
 import { RootState } from '../../store';
-import apiClient from '../../api/client';
+import { eventApi } from '../../api/services/eventApi';
 import { formatCurrency, formatDate } from '../../utils/format';
-import { Event } from '../../types';
+import { useDebounce } from '../../hooks/useDebounce';
+import { Event, PageResponse, EventStatus } from '../../types';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
-type TabType = 'PENDING' | 'APPROVED' | 'IN_PROGRESS';
+type TabType = 'PENDING' | 'APPROVED' | 'IN_PROGRESS' | 'CLOSED';
 
 const getEventStatusText = (item: Event) => {
-  if (item.isClosed === true || item.statusId === 4) {
+  if (item.statusId === EventStatus.REJECTED) {
+    return 'REJECTED';
+  }
+  if (item.isClosed === true || item.statusId === EventStatus.CLOSED) {
     return 'CLOSED';
   }
-  if (item.statusId === 2) {
+  if (item.statusId === EventStatus.APPROVED) {
     return 'APPROVED';
   }
-  if (item.statusId === 3) {
+  if (item.statusId === EventStatus.IN_PROGRESS) {
     return 'IN_PROGRESS';
   }
   return 'PENDING';
@@ -39,6 +45,10 @@ export const EventListScreen: React.FC = () => {
   const isAdmin = useSelector((state: RootState) => state.auth.isAdmin);
 
   const [activeTab, setActiveTab] = useState<TabType>(isAdmin ? 'PENDING' : 'IN_PROGRESS');
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 500);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(5);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
@@ -47,43 +57,56 @@ export const EventListScreen: React.FC = () => {
     }
   }, [isAdmin]);
 
-  // Map tabs to status-specific API endpoints
-  const getEndpoint = (tab: TabType) => {
-    if (!isAdmin) return '/events/in-progress';
+  const handleTabChange = (tab: TabType) => {
+    setActiveTab(tab);
+    setPage(0);
+  };
+
+  const handleSearchChange = (text: string) => {
+    setSearch(text);
+    setPage(0);
+  };
+
+  // Map tabs to EventStatus ID
+  const getStatusId = (tab: TabType): EventStatus => {
+    if (!isAdmin) return EventStatus.IN_PROGRESS;
     switch (tab) {
       case 'PENDING':
-        return '/events/pending';
+        return EventStatus.PENDING;
       case 'APPROVED':
-        return '/events/approved';
+        return EventStatus.APPROVED;
+      case 'CLOSED':
+        return EventStatus.CLOSED;
       default:
       case 'IN_PROGRESS':
-        return '/events/in-progress';
+        return EventStatus.IN_PROGRESS;
     }
   };
 
   const currentTab = isAdmin ? activeTab : 'IN_PROGRESS';
+  const statusId = getStatusId(currentTab);
 
-  const { data: events = [], isLoading, refetch } = useQuery<Event[]>({
-    queryKey: ['events', currentTab],
-    queryFn: async () => {
-      const res = await apiClient.get(getEndpoint(currentTab));
-      return res.data || [];
-    },
+  const { data: pageData, isLoading, refetch } = useQuery<PageResponse<Event>>({
+    queryKey: ['events', currentTab, statusId, debouncedSearch, page, pageSize],
+    queryFn: () => eventApi.getEventsByStatusId(statusId, { search: debouncedSearch, page, size: pageSize }),
   });
 
-  // Refetch events data whenever user navigates to Events tab
+  const events = pageData?.content || [];
+  const totalPages = pageData?.totalPages || 1;
+  const totalElements = pageData?.totalElements || events.length;
+
   useFocusEffect(
     React.useCallback(() => {
       refetch();
     }, [refetch])
   );
 
-  // Filter events client-side to ensure closed events are excluded from status-specific tabs
   const filteredEvents = events.filter((item) => {
     const status = getEventStatusText(item);
     if (activeTab === 'PENDING') return status === 'PENDING';
     if (activeTab === 'APPROVED') return status === 'APPROVED';
     if (activeTab === 'IN_PROGRESS') return status === 'IN_PROGRESS';
+    if (activeTab === 'CLOSED') return status === 'CLOSED' || item.statusId === EventStatus.CLOSED || item.isClosed === true;
     return true;
   });
 
@@ -100,7 +123,10 @@ export const EventListScreen: React.FC = () => {
       case 'APPROVED':
         return themeColors.success;
       case 'IN_PROGRESS':
-        return '#3B82F6'; // Blue
+        return '#3B82F6';
+      case 'REJECTED':
+      case 'CANCELLED':
+        return themeColors.error;
       case 'CLOSED':
         return themeColors.textMuted;
       default:
@@ -113,7 +139,7 @@ export const EventListScreen: React.FC = () => {
     return (
       <TouchableOpacity
         style={[styles.tabButton, isActive && styles.activeTabButton]}
-        onPress={() => setActiveTab(tab)}
+        onPress={() => handleTabChange(tab)}
         activeOpacity={0.8}
       >
         <Text style={[styles.tabLabel, isActive && styles.activeTabLabel]}>
@@ -133,8 +159,18 @@ export const EventListScreen: React.FC = () => {
           {renderTab('PENDING', 'Pending')}
           {renderTab('APPROVED', 'Approved')}
           {renderTab('IN_PROGRESS', 'In Progress')}
+          {renderTab('CLOSED', 'Closed')}
         </View>
       )}
+
+      {/* Search Section */}
+      <View style={styles.searchSection}>
+        <SearchBar
+          placeholder="Search events by family head name or type..."
+          value={search}
+          onChangeText={handleSearchChange}
+        />
+      </View>
 
       {isLoading ? (
         <LoadingSpinner />
@@ -160,7 +196,7 @@ export const EventListScreen: React.FC = () => {
                       {item.eventType}
                     </Text>
                     <Text variant="bodyMedium" style={styles.familyHead}>
-                      {item.familyHeadName} Head
+                      {item.familyHeadName}
                     </Text>
                   </View>
                   <View style={[styles.statusBadge, { backgroundColor: getStatusColor(statusStr) + '15' }]}>
@@ -177,7 +213,11 @@ export const EventListScreen: React.FC = () => {
                   </View>
                   <View style={styles.metaRow}>
                     <MaterialCommunityIcons name="calendar-range" size={16} color={themeColors.textMuted} />
-                    <Text style={styles.metaText}>{formatDate(item.eventDate)}</Text>
+                    <Text style={styles.metaText}>
+                      {item.endDate
+                        ? `${formatDate(item.startDate)} - ${formatDate(item.endDate)}`
+                        : formatDate(item.startDate)}
+                    </Text>
                   </View>
                 </View>
 
@@ -198,11 +238,26 @@ export const EventListScreen: React.FC = () => {
               </ReusableCard>
             );
           }}
+          ListFooterComponent={
+            filteredEvents.length > 0 ? (
+              <PaginationControl
+                page={page}
+                totalPages={totalPages}
+                totalElements={totalElements}
+                pageSize={pageSize}
+                onPageChange={setPage}
+                onPageSizeChange={(newSize) => {
+                  setPageSize(newSize);
+                  setPage(0);
+                }}
+              />
+            ) : null
+          }
           ListEmptyComponent={
             <EmptyState
               icon="calendar-blank-outline"
               title="No Events Found"
-              description={`There are currently no ${activeTab.toLowerCase()} events recorded.`}
+              description={search ? "No events matched your search criteria." : `There are currently no ${activeTab.toLowerCase()} events recorded.`}
               actionLabel="Book New Event"
               onAction={() => navigation.navigate('EventForm')}
             />
@@ -233,6 +288,12 @@ const styles = StyleSheet.create({
     borderBottomColor: themeColors.border,
     paddingHorizontal: 8,
   },
+  searchSection: {
+    padding: 12,
+    backgroundColor: themeColors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: themeColors.border,
+  },
   tabButton: {
     flex: 1,
     paddingVertical: 14,
@@ -253,7 +314,7 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     paddingVertical: 12,
-    paddingBottom: 88, // Space for FAB
+    paddingBottom: 88,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -318,7 +379,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     margin: 16,
     right: 0,
-    bottom: 16,
+    bottom: 70,
   },
 });
 
