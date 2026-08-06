@@ -1,21 +1,23 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, FlatList, RefreshControl } from 'react-native';
-import { Text, FAB, IconButton } from 'react-native-paper';
+import { Text, FAB } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useQuery } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../store';
 
-import { themeColors, shadows } from '../../theme';
+import { themeColors } from '../../theme';
 import { AppHeader } from '../../components/AppHeader';
 import { SearchBar } from '../../components/SearchBar';
 import { ReusableCard } from '../../components/ReusableCard';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { EmptyState } from '../../components/EmptyState';
+import { PaginationControl } from '../../components/PaginationControl';
 import { RootStackParamList } from '../../navigation/types';
-import apiClient from '../../api/client';
+import { expenseApi } from '../../api/services/expenseApi';
 import { formatCurrency, formatDate } from '../../utils/format';
+import { useDebounce } from '../../hooks/useDebounce';
 import { Expense, PageResponse } from '../../types';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
@@ -23,21 +25,17 @@ type NavigationProp = StackNavigationProp<RootStackParamList>;
 export const ExpenseListScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 500);
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(5);
   const [refreshing, setRefreshing] = useState(false);
-  const pageSize = 5;
 
   const isAdmin = useSelector((state: RootState) => state.auth.isAdmin);
 
-  // Fetch Expenses
-  const { data: pageData, isLoading, isFetching, refetch } = useQuery<PageResponse<Expense>>({
-    queryKey: ['expenses', page],
-    queryFn: async () => {
-      const res = await apiClient.get('/expenses', {
-        params: { page, size: pageSize },
-      });
-      return res.data;
-    },
+  // Fetch Expenses via expenseApi with debounced search
+  const { data: pageData, isLoading, refetch } = useQuery<PageResponse<Expense>>({
+    queryKey: ['expenses', debouncedSearch, page, pageSize],
+    queryFn: () => expenseApi.getExpenses({ search: debouncedSearch, page, size: pageSize }),
   });
 
   const expenses = pageData?.content || [];
@@ -54,11 +52,6 @@ export const ExpenseListScreen: React.FC = () => {
     await refetch();
     setRefreshing(false);
   };
-
-  const filteredExpenses = expenses.filter((e) =>
-    (e.description && e.description.toLowerCase().includes(search.toLowerCase())) ||
-    (e.category && e.category.toLowerCase().includes(search.toLowerCase()))
-  );
 
   return (
     <View style={styles.container}>
@@ -80,7 +73,7 @@ export const ExpenseListScreen: React.FC = () => {
         <LoadingSpinner />
       ) : (
         <FlatList
-          data={filteredExpenses}
+          data={expenses}
           keyExtractor={(item) => String(item.expenseId)}
           contentContainerStyle={styles.listContainer}
           refreshControl={
@@ -109,24 +102,18 @@ export const ExpenseListScreen: React.FC = () => {
             </ReusableCard>
           )}
           ListFooterComponent={
-            filteredExpenses.length > 0 ? (
-              <View style={styles.paginationContainer}>
-                <IconButton
-                  icon="chevron-left"
-                  size={20}
-                  disabled={page === 0 || isFetching}
-                  onPress={() => setPage((p) => Math.max(0, p - 1))}
-                />
-                <Text style={styles.paginationText}>
-                  Page {page + 1} of {totalPages} ({totalElements} total)
-                </Text>
-                <IconButton
-                  icon="chevron-right"
-                  size={20}
-                  disabled={page >= totalPages - 1 || isFetching}
-                  onPress={() => setPage((p) => p + 1)}
-                />
-              </View>
+            expenses.length > 0 ? (
+              <PaginationControl
+                page={page}
+                totalPages={totalPages}
+                totalElements={totalElements}
+                pageSize={pageSize}
+                onPageChange={setPage}
+                onPageSizeChange={(newSize) => {
+                  setPageSize(newSize);
+                  setPage(0);
+                }}
+              />
             ) : null
           }
           ListEmptyComponent={
@@ -202,24 +189,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     margin: 16,
     right: 0,
-    bottom: 16,
-  },
-  paginationContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 4,
-    marginHorizontal: 16,
-    marginTop: 12,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    ...shadows.soft,
-  },
-  paginationText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: themeColors.text,
-    marginHorizontal: 8,
+    bottom: 70,
   },
 });
 

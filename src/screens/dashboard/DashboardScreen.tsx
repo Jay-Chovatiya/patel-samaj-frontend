@@ -12,7 +12,7 @@ import { themeColors, shadows } from '../../theme';
 import { AppHeader } from '../../components/AppHeader';
 import { ReusableCard } from '../../components/ReusableCard';
 import { RootStackParamList } from '../../navigation/types';
-import apiClient from '../../api/client';
+import { eventApi } from '../../api/services/eventApi';
 import { formatCurrency, formatDate, ensureArray } from '../../utils/format';
 import { Event, PageResponse } from '../../types/index';
 
@@ -27,10 +27,7 @@ export const DashboardScreen: React.FC = () => {
   // Fetch live in-progress events
   const { data: rawEvents, refetch: refetchInProgress } = useQuery<PageResponse<Event>>({
     queryKey: ['events', 'in-progress'],
-    queryFn: async () => {
-      const res = await apiClient.get('/events/in-progress');
-      return res.data;
-    },
+    queryFn: () => eventApi.getInProgressEvents({ search: '', page: 0, size: 5 }) as Promise<PageResponse<Event>>,
   });
 
   const inProgressEvents: Event[] = ensureArray<Event>(rawEvents);

@@ -5,20 +5,18 @@ import { useForm, Controller } from 'react-hook-form';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-
-import { useSelector } from 'react-redux';
 import { themeColors } from '../../theme';
 import { AppHeader } from '../../components/AppHeader';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { DatePicker } from '../../components/DatePicker';
 import { BottomSheet } from '../../components/BottomSheet';
 import { ConfirmationDialog } from '../../components/ConfirmationDialog';
-import { RootState } from '../../store';
 import { RootStackParamList } from '../../navigation/types';
 import apiClient from '../../api/client';
+import { inventoryApi } from '../../api/services/inventoryApi';
+import { eventApi } from '../../api/services/eventApi';
 import { formatCurrency } from '../../utils/format';
-import { Item, EventItem, Event } from '../../types';
+import { Item, EventStatus, Event } from '../../types';
 
 type RoutePropType = RouteProp<RootStackParamList, 'EventForm'>;
 type NavigationProp = StackNavigationProp<RootStackParamList>;
@@ -35,7 +33,6 @@ export const EventFormScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const queryClient = useQueryClient();
   const editId = route.params?.id;
-  const isAdmin = useSelector((state: RootState) => state.auth.isAdmin);
 
   const [selectedItems, setSelectedItems] = useState<SelectedItemState[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
@@ -47,10 +44,7 @@ export const EventFormScreen: React.FC = () => {
   // Fetch Available Inventory Items
   const { data: inventoryItems = [] } = useQuery<Item[]>({
     queryKey: ['items'],
-    queryFn: async () => {
-      const res = await apiClient.get('/items');
-      return res.data.content || res.data || [];
-    },
+    queryFn: () => inventoryApi.getItems(),
   });
 
   const { control, handleSubmit, setValue, reset, formState: { errors } } = useForm({
@@ -75,8 +69,7 @@ export const EventFormScreen: React.FC = () => {
       const fetchEvent = async () => {
         setLoadingInitial(true);
         try {
-          const res = await apiClient.get(`/events/${editId}`);
-          const event: Event = res.data;
+          const event: Event = await eventApi.getEventById(editId);
 
           const stDate = event.startDate ? new Date(event.startDate) : new Date();
           const enDate = event.endDate ? new Date(event.endDate) : stDate;
@@ -134,15 +127,15 @@ export const EventFormScreen: React.FC = () => {
           priceAtBooking: item.price,
         })),
         isClosed: editId ? originalIsClosed : false,
-        statusId: editId ? originalStatusId : 1,
+        statusId: editId ? originalStatusId : EventStatus.PENDING,
       };
 
       if (editId) {
         // PUT for editing
-        return (await apiClient.put('/events', payload)).data;
+        return await eventApi.updateEvent(payload);
       } else {
         // POST for creation
-        return (await apiClient.post('/events', payload)).data;
+        return await eventApi.createEvent(payload);
       }
     },
     onSuccess: () => {
@@ -158,8 +151,7 @@ export const EventFormScreen: React.FC = () => {
   const closeEventMutation = useMutation({
     mutationFn: async () => {
       if (!editId) return;
-      const response = await apiClient.put(`/events/close/${editId}`);
-      return response.data;
+      return await eventApi.closeEvent(editId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['events'] });
@@ -173,11 +165,10 @@ export const EventFormScreen: React.FC = () => {
   const updateStatusMutation = useMutation({
     mutationFn: async (newStatusId: number) => {
       if (!editId) return;
-      const response = await apiClient.put('/events', {
+      return await eventApi.updateEvent({
         eventId: parseInt(editId, 10),
         statusId: newStatusId,
       });
-      return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['events'] });

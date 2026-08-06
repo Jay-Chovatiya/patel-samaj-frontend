@@ -49,6 +49,20 @@ export interface EventItem {
   priceAtBooking: number;
 }
 
+export enum EventStatus {
+  PENDING = 1,
+  APPROVED = 2,
+  IN_PROGRESS = 3,
+  CLOSED = 4,
+  REJECTED = 5,
+}
+
+export interface PaginationDTO {
+  search: string;
+  page: number;
+  size: number;
+}
+
 export interface Event {
   eventId: number;
   familyHeadName: string;
@@ -57,7 +71,7 @@ export interface Event {
   eventType: string;
   startDate: string; 
   endDate: string; 
-  statusId: number | null;
+  statusId: EventStatus | number | null;
   isClosed: boolean | null;
   totalAmount: number;
   items: EventItem[];

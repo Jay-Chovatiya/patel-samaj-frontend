@@ -15,7 +15,7 @@ import { RootState } from '../../store';
 import { RootStackParamList } from '../../navigation/types';
 import apiClient from '../../api/client';
 import { formatCurrency, formatDate } from '../../utils/format';
-import { Event } from '../../types';
+import { Event, EventStatus } from '../../types';
 
 type RoutePropType = RouteProp<RootStackParamList, 'EventDetails'>;
 type NavigationProp = StackNavigationProp<RootStackParamList>;
@@ -129,8 +129,8 @@ export const EventDetailsScreen: React.FC = () => {
     );
   }
 
-  const isClosed = event.isClosed === true || event.statusId === 4;
-  const isCancelled = event.statusId === 5;
+  const isClosed = event.isClosed === true || event.statusId === EventStatus.CLOSED;
+  const isCancelled = event.statusId === EventStatus.REJECTED || (event.statusId as any) === 5;
   const paid = event.paidAmount || 0;
   const total = event.totalAmount || 0;
   const remainingAmount = total - paid;
@@ -142,7 +142,7 @@ export const EventDetailsScreen: React.FC = () => {
     paymentStatus = 'PARTIAL';
   }
 
-  const statusText = isCancelled ? 'CANCELLED' : isClosed ? 'CLOSED' : event.statusId === 2 ? 'APPROVED' : event.statusId === 3 ? 'IN_PROGRESS' : 'PENDING';
+  const statusText = isCancelled ? 'REJECTED' : isClosed ? 'CLOSED' : event.statusId === EventStatus.APPROVED ? 'APPROVED' : event.statusId === EventStatus.IN_PROGRESS ? 'IN_PROGRESS' : 'PENDING';
 
   return (
     <View style={styles.container}>
@@ -286,11 +286,11 @@ export const EventDetailsScreen: React.FC = () => {
         {/* Actions */}
         {!isClosed && !isCancelled && (
           <View style={styles.actionContainer}>
-            {event.statusId === 1 && isAdmin && (
+            {event.statusId === EventStatus.PENDING && isAdmin && (
               <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12, marginBottom: 12 }}>
                 <Button
                   mode="contained"
-                  onPress={() => confirmStatusChange(2)}
+                  onPress={() => confirmStatusChange(EventStatus.APPROVED)}
                   buttonColor={themeColors.success}
                   icon="check-circle-outline"
                   style={{ paddingHorizontal: 16 }}
@@ -300,7 +300,7 @@ export const EventDetailsScreen: React.FC = () => {
                 </Button>
                 <Button
                   mode="contained"
-                  onPress={() => confirmStatusChange(5)}
+                  onPress={() => confirmStatusChange(EventStatus.REJECTED)}
                   buttonColor={themeColors.error}
                   icon="close-circle-outline"
                   style={{ paddingHorizontal: 16 }}
@@ -310,10 +310,10 @@ export const EventDetailsScreen: React.FC = () => {
                 </Button>
               </View>
             )}
-            {event.statusId === 2 && (
+            {event.statusId === EventStatus.APPROVED && (
               <Button
                 mode="contained"
-                onPress={() => confirmStatusChange(3)}
+                onPress={() => confirmStatusChange(EventStatus.IN_PROGRESS)}
                 buttonColor={themeColors.primary}
                 icon="play-circle-outline"
                 style={styles.actionBtn}
@@ -322,7 +322,7 @@ export const EventDetailsScreen: React.FC = () => {
                 MARK IN PROGRESS
               </Button>
             )}
-            {isAdmin && event.statusId === 3 && (
+            {isAdmin && event.statusId === EventStatus.IN_PROGRESS && (
               <Button
                 mode="contained"
                 onPress={() => setCloseDialogVisible(true)}
