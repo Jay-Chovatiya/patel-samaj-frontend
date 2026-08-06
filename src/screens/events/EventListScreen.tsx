@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
-import { Text, FAB } from 'react-native-paper';
+import { Text, FAB, IconButton } from 'react-native-paper';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useQuery } from '@tanstack/react-query';
@@ -16,12 +16,15 @@ import { RootStackParamList } from '../../navigation/types';
 import { RootState } from '../../store';
 import apiClient from '../../api/client';
 import { formatCurrency, formatDate } from '../../utils/format';
-import { Event } from '../../types';
+import { Event, PageResponse } from '../../types';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
-type TabType = 'PENDING' | 'APPROVED' | 'IN_PROGRESS';
+type TabType = 'PENDING' | 'APPROVED' | 'IN_PROGRESS' | 'CLOSED';
 
 const getEventStatusText = (item: Event) => {
+  if (item.statusId === 5) {
+    return 'CANCELLED';
+  }
   if (item.isClosed === true || item.statusId === 4) {
     return 'CLOSED';
   }
@@ -39,13 +42,20 @@ export const EventListScreen: React.FC = () => {
   const isAdmin = useSelector((state: RootState) => state.auth.isAdmin);
 
   const [activeTab, setActiveTab] = useState<TabType>(isAdmin ? 'PENDING' : 'IN_PROGRESS');
+  const [page, setPage] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const pageSize = 5;
 
   useEffect(() => {
     if (!isAdmin) {
       setActiveTab('IN_PROGRESS');
     }
   }, [isAdmin]);
+
+  const handleTabChange = (tab: TabType) => {
+    setActiveTab(tab);
+    setPage(0);
+  };
 
   // Map tabs to status-specific API endpoints
   const getEndpoint = (tab: TabType) => {
@@ -55,6 +65,8 @@ export const EventListScreen: React.FC = () => {
         return '/events/pending';
       case 'APPROVED':
         return '/events/approved';
+      case 'CLOSED':
+        return '/events/closed';
       default:
       case 'IN_PROGRESS':
         return '/events/in-progress';
@@ -63,13 +75,19 @@ export const EventListScreen: React.FC = () => {
 
   const currentTab = isAdmin ? activeTab : 'IN_PROGRESS';
 
-  const { data: events = [], isLoading, refetch } = useQuery<Event[]>({
-    queryKey: ['events', currentTab],
+  const { data: pageData, isLoading, isFetching, refetch } = useQuery<PageResponse<Event>>({
+    queryKey: ['events', currentTab, page],
     queryFn: async () => {
-      const res = await apiClient.get(getEndpoint(currentTab));
-      return res.data || [];
+      const res = await apiClient.get(getEndpoint(currentTab), {
+        params: { page, size: pageSize },
+      });
+      return res.data;
     },
   });
+
+  const events = pageData?.content || [];
+  const totalPages = pageData?.totalPages || 1;
+  const totalElements = pageData?.totalElements || events.length;
 
   // Refetch events data whenever user navigates to Events tab
   useFocusEffect(
@@ -84,6 +102,7 @@ export const EventListScreen: React.FC = () => {
     if (activeTab === 'PENDING') return status === 'PENDING';
     if (activeTab === 'APPROVED') return status === 'APPROVED';
     if (activeTab === 'IN_PROGRESS') return status === 'IN_PROGRESS';
+    if (activeTab === 'CLOSED') return status === 'CLOSED' || item.statusId === 4 || item.isClosed === true;
     return true;
   });
 
@@ -101,6 +120,8 @@ export const EventListScreen: React.FC = () => {
         return themeColors.success;
       case 'IN_PROGRESS':
         return '#3B82F6'; // Blue
+      case 'CANCELLED':
+        return themeColors.error;
       case 'CLOSED':
         return themeColors.textMuted;
       default:
@@ -113,7 +134,7 @@ export const EventListScreen: React.FC = () => {
     return (
       <TouchableOpacity
         style={[styles.tabButton, isActive && styles.activeTabButton]}
-        onPress={() => setActiveTab(tab)}
+        onPress={() => handleTabChange(tab)}
         activeOpacity={0.8}
       >
         <Text style={[styles.tabLabel, isActive && styles.activeTabLabel]}>
@@ -133,6 +154,7 @@ export const EventListScreen: React.FC = () => {
           {renderTab('PENDING', 'Pending')}
           {renderTab('APPROVED', 'Approved')}
           {renderTab('IN_PROGRESS', 'In Progress')}
+          {renderTab('CLOSED', 'Closed')}
         </View>
       )}
 
@@ -160,7 +182,7 @@ export const EventListScreen: React.FC = () => {
                       {item.eventType}
                     </Text>
                     <Text variant="bodyMedium" style={styles.familyHead}>
-                      {item.familyHeadName} Head
+                      {item.familyHeadName}
                     </Text>
                   </View>
                   <View style={[styles.statusBadge, { backgroundColor: getStatusColor(statusStr) + '15' }]}>
@@ -177,7 +199,11 @@ export const EventListScreen: React.FC = () => {
                   </View>
                   <View style={styles.metaRow}>
                     <MaterialCommunityIcons name="calendar-range" size={16} color={themeColors.textMuted} />
-                    <Text style={styles.metaText}>{formatDate(item.eventDate)}</Text>
+                    <Text style={styles.metaText}>
+                      {item.endDate
+                        ? `${formatDate(item.startDate)} - ${formatDate(item.endDate)}`
+                        : formatDate(item.startDate)}
+                    </Text>
                   </View>
                 </View>
 
@@ -198,6 +224,27 @@ export const EventListScreen: React.FC = () => {
               </ReusableCard>
             );
           }}
+          ListFooterComponent={
+            filteredEvents.length > 0 ? (
+              <View style={styles.paginationContainer}>
+                <IconButton
+                  icon="chevron-left"
+                  size={20}
+                  disabled={page === 0 || isFetching}
+                  onPress={() => setPage((p) => Math.max(0, p - 1))}
+                />
+                <Text style={styles.paginationText}>
+                  Page {page + 1} of {totalPages} ({totalElements} total)
+                </Text>
+                <IconButton
+                  icon="chevron-right"
+                  size={20}
+                  disabled={page >= totalPages - 1 || isFetching}
+                  onPress={() => setPage((p) => p + 1)}
+                />
+              </View>
+            ) : null
+          }
           ListEmptyComponent={
             <EmptyState
               icon="calendar-blank-outline"
@@ -319,6 +366,23 @@ const styles = StyleSheet.create({
     margin: 16,
     right: 0,
     bottom: 16,
+  },
+  paginationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 4,
+    marginHorizontal: 16,
+    marginTop: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    ...shadows.soft,
+  },
+  paginationText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: themeColors.text,
+    marginHorizontal: 8,
   },
 });
 

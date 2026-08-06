@@ -198,6 +198,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     height: 48,
     justifyContent: 'center',
+    alignSelf: 'center',
+    marginTop: 16,
+    paddingHorizontal: 24,
+    minWidth: 180,
   },
   errorContainer: {
     flex: 1,

@@ -45,8 +45,11 @@ export const PrimaryButton: React.FC<PrimaryButtonProps> = ({
 const styles = StyleSheet.create({
   button: {
     borderRadius: 8,
-    marginVertical: 8,
+    marginVertical: 12,
     justifyContent: 'center',
+    alignSelf: 'center',
+    paddingHorizontal: 24,
+    minWidth: 180,
   },
   content: {
     height: 48,

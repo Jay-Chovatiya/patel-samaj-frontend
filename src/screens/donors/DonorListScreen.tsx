@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, FlatList, RefreshControl } from 'react-native';
-import { Text, FAB } from 'react-native-paper';
+import { Text, FAB, IconButton } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useQuery } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../store';
 
-import { themeColors } from '../../theme';
+import { themeColors, shadows } from '../../theme';
 import { AppHeader } from '../../components/AppHeader';
 import { SearchBar } from '../../components/SearchBar';
 import { ReusableCard } from '../../components/ReusableCard';
@@ -16,25 +16,39 @@ import { EmptyState } from '../../components/EmptyState';
 import { RootStackParamList } from '../../navigation/types';
 import apiClient from '../../api/client';
 import { formatCurrency, formatDate } from '../../utils/format';
-import { Donor } from '../../types';
+import { Donor, PageResponse } from '../../types';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
 
 export const DonorListScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const [search, setSearch] = useState('');
+
+  const [page, setPage] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const pageSize = 5;
 
   const isAdmin = useSelector((state: RootState) => state.auth.isAdmin);
 
   // TanStack Query for Donors
-  const { data: donors = [], isLoading, refetch } = useQuery<Donor[]>({
-    queryKey: ['donors'],
+  const { data: pageData, isLoading, isFetching, refetch } = useQuery<PageResponse<Donor>>({
+    queryKey: ['donors', page],
     queryFn: async () => {
-      const res = await apiClient.get('/donors');
-      return res.data || [];
+      const res = await apiClient.get('/donors', {
+        params: { page, size: pageSize },
+      });
+      return res.data;
     },
   });
+
+  const donors = pageData?.content || [];
+  const totalPages = pageData?.totalPages || 1;
+  const totalElements = pageData?.totalElements || donors.length;
+
+  const handleSearchChange = (text: string) => {
+    setSearch(text);
+    setPage(0);
+  };
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -43,7 +57,7 @@ export const DonorListScreen: React.FC = () => {
   };
 
   const filteredDonors = donors.filter((d) =>
-    d.fullName.toLowerCase().includes(search.toLowerCase()) ||
+    (d.fullName && d.fullName.toLowerCase().includes(search.toLowerCase())) ||
     (d.remarks && d.remarks.toLowerCase().includes(search.toLowerCase()))
   );
 
@@ -55,7 +69,7 @@ export const DonorListScreen: React.FC = () => {
         <SearchBar
           placeholder="Search donors by name..."
           value={search}
-          onChangeText={setSearch}
+          onChangeText={handleSearchChange}
         />
       </View>
 
@@ -87,14 +101,35 @@ export const DonorListScreen: React.FC = () => {
                 <Text variant="bodyMedium" style={styles.dateLabel}>
                   Donated on: {formatDate(item.donationDate)}
                 </Text>
-                {item.remarks && (
+                {item.remarks !== null && item.remarks !== undefined && item.remarks.trim() !== '' ? (
                   <Text variant="bodySmall" style={styles.remarksLabel} numberOfLines={1}>
-                    "{item.remarks}"
+                    {`"${item.remarks}"`}
                   </Text>
-                )}
+                ) : null}
               </View>
             </ReusableCard>
           )}
+          ListFooterComponent={
+            filteredDonors.length > 0 ? (
+              <View style={styles.paginationContainer}>
+                <IconButton
+                  icon="chevron-left"
+                  size={20}
+                  disabled={page === 0 || isFetching}
+                  onPress={() => setPage((p) => Math.max(0, p - 1))}
+                />
+                <Text style={styles.paginationText}>
+                  Page {page + 1} of {totalPages} ({totalElements} total)
+                </Text>
+                <IconButton
+                  icon="chevron-right"
+                  size={20}
+                  disabled={page >= totalPages - 1 || isFetching}
+                  onPress={() => setPage((p) => p + 1)}
+                />
+              </View>
+            ) : null
+          }
           ListEmptyComponent={
             <EmptyState
               icon="hand-heart-outline"
@@ -167,6 +202,23 @@ const styles = StyleSheet.create({
     margin: 16,
     right: 0,
     bottom: 16,
+  },
+  paginationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 4,
+    marginHorizontal: 16,
+    marginTop: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    ...shadows.soft,
+  },
+  paginationText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: themeColors.text,
+    marginHorizontal: 8,
   },
 });
 

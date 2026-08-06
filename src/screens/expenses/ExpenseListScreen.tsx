@@ -7,7 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../store';
 
-import { themeColors } from '../../theme';
+import { themeColors, shadows } from '../../theme';
 import { AppHeader } from '../../components/AppHeader';
 import { SearchBar } from '../../components/SearchBar';
 import { ReusableCard } from '../../components/ReusableCard';
@@ -16,25 +16,38 @@ import { EmptyState } from '../../components/EmptyState';
 import { RootStackParamList } from '../../navigation/types';
 import apiClient from '../../api/client';
 import { formatCurrency, formatDate } from '../../utils/format';
-import { Expense } from '../../types';
+import { Expense, PageResponse } from '../../types';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
 
 export const ExpenseListScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const pageSize = 5;
 
   const isAdmin = useSelector((state: RootState) => state.auth.isAdmin);
 
   // Fetch Expenses
-  const { data: expenses = [], isLoading, refetch } = useQuery<Expense[]>({
-    queryKey: ['expenses'],
+  const { data: pageData, isLoading, isFetching, refetch } = useQuery<PageResponse<Expense>>({
+    queryKey: ['expenses', page],
     queryFn: async () => {
-      const res = await apiClient.get('/expenses');
-      return res.data || [];
+      const res = await apiClient.get('/expenses', {
+        params: { page, size: pageSize },
+      });
+      return res.data;
     },
   });
+
+  const expenses = pageData?.content || [];
+  const totalPages = pageData?.totalPages || 1;
+  const totalElements = pageData?.totalElements || expenses.length;
+
+  const handleSearchChange = (text: string) => {
+    setSearch(text);
+    setPage(0);
+  };
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -59,7 +72,7 @@ export const ExpenseListScreen: React.FC = () => {
         <SearchBar
           placeholder="Search expenses by name or category..."
           value={search}
-          onChangeText={setSearch}
+          onChangeText={handleSearchChange}
         />
       </View>
 
@@ -95,6 +108,27 @@ export const ExpenseListScreen: React.FC = () => {
               </View>
             </ReusableCard>
           )}
+          ListFooterComponent={
+            filteredExpenses.length > 0 ? (
+              <View style={styles.paginationContainer}>
+                <IconButton
+                  icon="chevron-left"
+                  size={20}
+                  disabled={page === 0 || isFetching}
+                  onPress={() => setPage((p) => Math.max(0, p - 1))}
+                />
+                <Text style={styles.paginationText}>
+                  Page {page + 1} of {totalPages} ({totalElements} total)
+                </Text>
+                <IconButton
+                  icon="chevron-right"
+                  size={20}
+                  disabled={page >= totalPages - 1 || isFetching}
+                  onPress={() => setPage((p) => p + 1)}
+                />
+              </View>
+            ) : null
+          }
           ListEmptyComponent={
             <EmptyState
               icon="cash-remove"
@@ -169,6 +203,23 @@ const styles = StyleSheet.create({
     margin: 16,
     right: 0,
     bottom: 16,
+  },
+  paginationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 4,
+    marginHorizontal: 16,
+    marginTop: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    ...shadows.soft,
+  },
+  paginationText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: themeColors.text,
+    marginHorizontal: 8,
   },
 });
 

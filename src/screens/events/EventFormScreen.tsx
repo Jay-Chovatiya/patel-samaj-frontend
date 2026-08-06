@@ -49,7 +49,7 @@ export const EventFormScreen: React.FC = () => {
     queryKey: ['items'],
     queryFn: async () => {
       const res = await apiClient.get('/items');
-      return res.data;
+      return res.data.content || res.data || [];
     },
   });
 
@@ -59,7 +59,8 @@ export const EventFormScreen: React.FC = () => {
       contactNumber: '',
       email: '',
       eventType: '',
-      eventDate: new Date(),
+      startDate: new Date(),
+      endDate: new Date(),
       remarks: '',
       paidAmount: '0',
     },
@@ -77,12 +78,16 @@ export const EventFormScreen: React.FC = () => {
           const res = await apiClient.get(`/events/${editId}`);
           const event: Event = res.data;
 
+          const stDate = event.startDate ? new Date(event.startDate) : new Date();
+          const enDate = event.endDate ? new Date(event.endDate) : stDate;
+
           reset({
             familyHeadName: event.familyHeadName,
             contactNumber: event.contactNumber,
             email: event.email || '',
             eventType: event.eventType,
-            eventDate: new Date(event.eventDate),
+            startDate: stDate,
+            endDate: enDate,
             remarks: event.remarks || '',
             paidAmount: event.paidAmount?.toString() || '0',
           });
@@ -117,7 +122,8 @@ export const EventFormScreen: React.FC = () => {
         contactNumber: formData.contactNumber,
         email: formData.email,
         eventType: formData.eventType,
-        eventDate: formData.eventDate.toISOString(),
+        startDate: formData.startDate.toISOString(),
+        endDate: formData.endDate ? formData.endDate.toISOString() : null,
         remarks: formData.remarks,
         paidAmount: parseFloat(formData.paidAmount || '0'),
         totalAmount: liveTotalAmount,
@@ -381,12 +387,27 @@ export const EventFormScreen: React.FC = () => {
 
             <Controller
               control={control}
-              name="eventDate"
+              name="startDate"
               render={({ field: { onChange, value } }) => (
                 <DatePicker
                   date={value}
+                  onChange={(selectedDate: Date) => {
+                    onChange(selectedDate);
+                    setValue('endDate', selectedDate);
+                  }}
+                  label="Start Date"
+                />
+              )}
+            />
+
+            <Controller
+              control={control}
+              name="endDate"
+              render={({ field: { onChange, value } }) => (
+                <DatePicker
+                  date={value || new Date()}
                   onChange={onChange}
-                  label="Event Date"
+                  label="End Date"
                 />
               )}
             />
@@ -480,63 +501,25 @@ export const EventFormScreen: React.FC = () => {
               )}
             />
 
-            <PrimaryButton
-              onPress={handleSubmit(onSubmit)}
-              loading={saveEventMutation.isPending || loadingInitial}
-              style={styles.saveBtn}
-            >
-              {editId ? 'UPDATE BOOKING' : 'CREATE BOOKING'}
-            </PrimaryButton>
-
-            {editId && isAdmin && !originalIsClosed && originalStatusId === 1 && (
-              <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-                <Button
-                  mode="contained"
-                  onPress={() => updateStatusMutation.mutate(2)}
-                  buttonColor={themeColors.success}
-                  icon="check-circle-outline"
-                  style={{ flex: 1 }}
-                  loading={updateStatusMutation.isPending}
-                  disabled={saveEventMutation.isPending || closeEventMutation.isPending}
-                >
-                  APPROVE EVENT
-                </Button>
-                <Button
-                  mode="contained"
-                  onPress={() => updateStatusMutation.mutate(4)}
-                  buttonColor={themeColors.error}
-                  icon="close-circle-outline"
-                  style={{ flex: 1 }}
-                  loading={updateStatusMutation.isPending}
-                  disabled={saveEventMutation.isPending || closeEventMutation.isPending}
-                >
-                  CANCEL EVENT
-                </Button>
-              </View>
-            )}
-
-            {editId && isAdmin && !originalIsClosed && originalStatusId === 3 && (
+            <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 16 }}>
               <Button
-                mode="contained"
-                onPress={() => setCloseDialogVisible(true)}
-                buttonColor={themeColors.error}
-                icon="lock-outline"
-                style={{ marginTop: 12 }}
-                disabled={saveEventMutation.isPending || closeEventMutation.isPending || updateStatusMutation.isPending}
+                mode="outlined"
+                onPress={() => navigation.goBack()}
+                textColor={themeColors.textMuted}
+                style={{ borderRadius: 8, height: 48, justifyContent: 'center', borderColor: themeColors.border, paddingHorizontal: 16, minWidth: 120 }}
+                disabled={saveEventMutation.isPending || loadingInitial}
               >
-                CLOSE & LOCK EVENT
+                CANCEL
               </Button>
-            )}
+              <PrimaryButton
+                onPress={handleSubmit(onSubmit)}
+                loading={saveEventMutation.isPending || loadingInitial}
+                style={{ marginVertical: 0, minWidth: 140 }}
+              >
+                {editId ? 'UPDATE BOOKING' : 'CREATE BOOKING'}
+              </PrimaryButton>
+            </View>
 
-            <Button
-              mode="outlined"
-              onPress={() => navigation.goBack()}
-              textColor={themeColors.textMuted}
-              style={{ marginTop: 12 }}
-              disabled={saveEventMutation.isPending || closeEventMutation.isPending || updateStatusMutation.isPending}
-            >
-              BACk
-            </Button>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

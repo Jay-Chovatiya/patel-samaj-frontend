@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, ScrollView, KeyboardAvoidingView, Platform, Switch } from 'react-native';
-import { Text, TextInput, HelperText } from 'react-native-paper';
+import { Text, TextInput, HelperText, Button } from 'react-native-paper';
 import { useForm, Controller } from 'react-hook-form';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -198,13 +198,24 @@ export const ItemFormScreen: React.FC = () => {
               )}
             />
 
-            <PrimaryButton
-              onPress={handleSubmit(onSubmit)}
-              loading={saveItemMutation.isPending || loadingInitial}
-              style={styles.saveBtn}
-            >
-              {editId ? 'UPDATE ITEM' : 'SAVE ITEM'}
-            </PrimaryButton>
+            <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 16 }}>
+              <Button
+                mode="outlined"
+                onPress={() => navigation.goBack()}
+                textColor={themeColors.textMuted}
+                style={{ borderRadius: 8, height: 48, justifyContent: 'center', borderColor: themeColors.border, paddingHorizontal: 16, minWidth: 120 }}
+                disabled={saveItemMutation.isPending || loadingInitial}
+              >
+                CANCEL
+              </Button>
+              <PrimaryButton
+                onPress={handleSubmit(onSubmit)}
+                loading={saveItemMutation.isPending || loadingInitial}
+                style={{ marginVertical: 0, minWidth: 140 }}
+              >
+                {editId ? 'UPDATE ITEM' : 'SAVE ITEM'}
+              </PrimaryButton>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

@@ -130,6 +130,7 @@ export const EventDetailsScreen: React.FC = () => {
   }
 
   const isClosed = event.isClosed === true || event.statusId === 4;
+  const isCancelled = event.statusId === 5;
   const paid = event.paidAmount || 0;
   const total = event.totalAmount || 0;
   const remainingAmount = total - paid;
@@ -141,7 +142,7 @@ export const EventDetailsScreen: React.FC = () => {
     paymentStatus = 'PARTIAL';
   }
 
-  const statusText = isClosed ? 'CLOSED' : event.statusId === 2 ? 'APPROVED' : event.statusId === 3 ? 'IN_PROGRESS' : 'PENDING';
+  const statusText = isCancelled ? 'CANCELLED' : isClosed ? 'CLOSED' : event.statusId === 2 ? 'APPROVED' : event.statusId === 3 ? 'IN_PROGRESS' : 'PENDING';
 
   return (
     <View style={styles.container}>
@@ -149,8 +150,8 @@ export const EventDetailsScreen: React.FC = () => {
         title="Event Details"
         showBack={true}
         onBack={() => navigation.goBack()}
-        rightActionIcon={!isClosed ? 'pencil' : undefined}
-        onRightAction={!isClosed ? () => navigation.navigate('EventForm', { id: String(event.eventId) }) : undefined}
+        rightActionIcon={!isClosed && !isCancelled ? 'pencil' : undefined}
+        onRightAction={!isClosed && !isCancelled ? () => navigation.navigate('EventForm', { id: String(event.eventId) }) : undefined}
       />
 
       {/* Banner for LOCKED state */}
@@ -181,10 +182,14 @@ export const EventDetailsScreen: React.FC = () => {
                 <Text variant="headlineSmall" style={styles.eventType}>
                   {event.eventType}
                 </Text>
-                <Text style={styles.eventDate}>Date: {formatDate(event.eventDate)}</Text>
+                <Text style={styles.eventDate}>
+                  Date: {event.endDate ? `${formatDate(event.startDate)} to ${formatDate(event.endDate)}` : formatDate(event.startDate)}
+                </Text>
               </View>
               {isClosed ? (
                 <Badge style={styles.lockedBadge}>LOCKED</Badge>
+              ) : isCancelled ? (
+                <Badge style={[styles.statusBadge, { backgroundColor: themeColors.error }]}>CANCELLED</Badge>
               ) : (
                 <Badge style={[styles.statusBadge, { backgroundColor: themeColors.primary }]}>
                   {statusText}
@@ -279,29 +284,29 @@ export const EventDetailsScreen: React.FC = () => {
         </Card>
 
         {/* Actions */}
-        {!isClosed && (
+        {!isClosed && !isCancelled && (
           <View style={styles.actionContainer}>
             {event.statusId === 1 && isAdmin && (
-              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12, marginBottom: 12 }}>
                 <Button
                   mode="contained"
                   onPress={() => confirmStatusChange(2)}
                   buttonColor={themeColors.success}
                   icon="check-circle-outline"
-                  style={{ flex: 1 }}
+                  style={{ paddingHorizontal: 16 }}
                   disabled={updateStatusMutation.isPending || closeEventMutation.isPending}
                 >
                   APPROVE EVENT
                 </Button>
                 <Button
                   mode="contained"
-                  onPress={() => confirmStatusChange(4)}
+                  onPress={() => confirmStatusChange(5)}
                   buttonColor={themeColors.error}
                   icon="close-circle-outline"
-                  style={{ flex: 1 }}
+                  style={{ paddingHorizontal: 16 }}
                   disabled={updateStatusMutation.isPending || closeEventMutation.isPending}
                 >
-                  CANCEL EVENT
+                  REJECT EVENT
                 </Button>
               </View>
             )}
@@ -498,14 +503,21 @@ const styles = StyleSheet.create({
   },
   actionContainer: {
     marginTop: 16,
+    alignItems: 'center',
   },
   actionBtn: {
     borderRadius: 8,
     marginBottom: 12,
+    alignSelf: 'center',
+    paddingHorizontal: 20,
+    minWidth: 180,
   },
   editBtn: {
     borderRadius: 8,
     borderColor: themeColors.secondary,
+    alignSelf: 'center',
+    paddingHorizontal: 20,
+    minWidth: 180,
   },
   errorView: {
     flex: 1,

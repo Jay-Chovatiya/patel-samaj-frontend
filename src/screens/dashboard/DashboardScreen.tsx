@@ -11,11 +11,10 @@ import { RootState } from '../../store';
 import { themeColors, shadows } from '../../theme';
 import { AppHeader } from '../../components/AppHeader';
 import { ReusableCard } from '../../components/ReusableCard';
-import { SkeletonLoader } from '../../components/SkeletonLoader';
 import { RootStackParamList } from '../../navigation/types';
 import apiClient from '../../api/client';
-import { formatCurrency, formatDate } from '../../utils/format';
-import { Donor, Event, Expense } from '../../types/index';
+import { formatCurrency, formatDate, ensureArray } from '../../utils/format';
+import { Event, PageResponse } from '../../types/index';
 
 type NavigationProp = StackNavigationProp<RootStackParamList>;
 
@@ -26,13 +25,15 @@ export const DashboardScreen: React.FC = () => {
   const isAdmin = useSelector((state: RootState) => state.auth.isAdmin);
 
   // Fetch live in-progress events
-  const { data: inProgressEvents = [], refetch: refetchInProgress } = useQuery<Event[]>({
+  const { data: rawEvents, refetch: refetchInProgress } = useQuery<PageResponse<Event>>({
     queryKey: ['events', 'in-progress'],
     queryFn: async () => {
       const res = await apiClient.get('/events/in-progress');
-      return res.data || [];
+      return res.data;
     },
   });
+
+  const inProgressEvents: Event[] = ensureArray<Event>(rawEvents);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -216,14 +217,17 @@ export const DashboardScreen: React.FC = () => {
         </View>
 
         {inProgressEvents
-          .filter(e => !e.isClosed && e.statusId !== 4)
           .slice(0, 3)
-          .map((evt) => (
+          .map((evt: Event) => (
             <ReusableCard key={evt.eventId} onPress={() => navigation.navigate('EventDetails' as any, { id: String(evt.eventId) })}>
               <View style={styles.listRow}>
                 <View style={{ flex: 1, marginRight: 8 }}>
                   <Text style={styles.donorName}>{evt.eventType} - {evt.familyHeadName}</Text>
-                  <Text style={styles.dateLabel}>{formatDate(evt.eventDate)}</Text>
+                  <Text style={styles.dateLabel}>
+                    {evt.endDate
+                      ? `${formatDate(evt.startDate)} - ${formatDate(evt.endDate)}`
+                      : formatDate(evt.startDate)}
+                  </Text>
                 </View>
                 <View style={[styles.statusBadge, { backgroundColor: '#3B82F615' }]}>
                   <Text style={[styles.statusText, { color: '#3B82F6' }]}>IN_PROGRESS</Text>
@@ -231,7 +235,7 @@ export const DashboardScreen: React.FC = () => {
               </View>
             </ReusableCard>
           ))}
-        {inProgressEvents.filter(e => !e.isClosed && e.statusId !== 4).length === 0 && (
+        {inProgressEvents.length === 0 && (
           <Text style={styles.emptyText}>No events currently in progress.</Text>
         )}
       </ScrollView>

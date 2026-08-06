@@ -55,13 +55,25 @@ export interface Event {
   contactNumber: string;
   email: string;
   eventType: string;
-  eventDate: string; // ISO date string
+  startDate: string; 
+  endDate: string; 
   statusId: number | null;
   isClosed: boolean | null;
   totalAmount: number;
   items: EventItem[];
   remarks?: string;
   paidAmount?: number;
+}
+
+export interface PageResponse<T> {
+  content: T[];
+  totalElements: number;
+  totalPages: number;
+  size: number;
+  number: number;
+  first: boolean;
+  last: boolean;
+  empty: boolean;
 }
 
 export interface Expense {
