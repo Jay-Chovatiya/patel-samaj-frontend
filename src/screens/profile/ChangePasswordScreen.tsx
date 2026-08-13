@@ -10,7 +10,7 @@ import { RootState } from '../../store';
 import { themeColors } from '../../theme';
 import { AppHeader } from '../../components/AppHeader';
 import { PrimaryButton } from '../../components/PrimaryButton';
-import apiClient from '../../api/client';
+import { userApi } from '../../api/services/userApi';
 import { ChangePasswordDTO } from '../../types';
 
 export const ChangePasswordScreen: React.FC = () => {
@@ -41,8 +41,7 @@ export const ChangePasswordScreen: React.FC = () => {
         currentPassword: data.currentPassword,
         newPassword: data.newPassword,
       };
-      const response = await apiClient.post('/user/change-password', payload);
-      return response.data;
+      return await userApi.changePassword(payload);
     },
     onSuccess: () => {
       setToastError(false);

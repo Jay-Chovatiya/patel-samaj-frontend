@@ -16,7 +16,6 @@ import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { EmptyState } from '../../components/EmptyState';
 import { ConfirmationDialog } from '../../components/ConfirmationDialog';
 import { RootStackParamList } from '../../navigation/types';
-import apiClient from '../../api/client';
 import { inventoryApi } from '../../api/services/inventoryApi';
 import { formatCurrency } from '../../utils/format';
 import { Item } from '../../types';

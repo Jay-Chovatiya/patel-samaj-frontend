@@ -12,10 +12,10 @@ import { DatePicker } from '../../components/DatePicker';
 import { BottomSheet } from '../../components/BottomSheet';
 import { ConfirmationDialog } from '../../components/ConfirmationDialog';
 import { RootStackParamList } from '../../navigation/types';
-import apiClient from '../../api/client';
 import { inventoryApi } from '../../api/services/inventoryApi';
 import { eventApi } from '../../api/services/eventApi';
 import { formatCurrency } from '../../utils/format';
+import { shareEventPdf } from '../../utils/pdfShare';
 import { Item, EventStatus, Event } from '../../types';
 
 type RoutePropType = RouteProp<RootStackParamList, 'EventForm'>;
@@ -47,7 +47,7 @@ export const EventFormScreen: React.FC = () => {
     queryFn: () => inventoryApi.getItems(),
   });
 
-  const { control, handleSubmit, setValue, reset, formState: { errors } } = useForm({
+  const { control, handleSubmit, setValue, reset, getValues, formState: { errors } } = useForm({
     defaultValues: {
       familyHeadName: '',
       contactNumber: '',
@@ -153,10 +153,24 @@ export const EventFormScreen: React.FC = () => {
       if (!editId) return;
       return await eventApi.closeEvent(editId);
     },
-    onSuccess: () => {
+    onSuccess: async (pdfData: ArrayBuffer | undefined) => {
       queryClient.invalidateQueries({ queryKey: ['events'] });
-      queryClient.invalidateQueries({ queryKey: ['event', editId] });
+      if (editId) {
+        queryClient.invalidateQueries({ queryKey: ['event', editId] });
+      }
       setCloseDialogVisible(false);
+
+      if (pdfData && editId) {
+        const values = getValues();
+        await shareEventPdf({
+          pdfData,
+          eventId: editId,
+          contactNumber: values.contactNumber,
+          familyHeadName: values.familyHeadName,
+          eventType: values.eventType,
+        });
+      }
+
       navigation.goBack();
     },
   });
@@ -529,8 +543,8 @@ export const EventFormScreen: React.FC = () => {
       <ConfirmationDialog
         visible={closeDialogVisible}
         title="Close Event Billing"
-        message="Are you sure you want to close and lock this event booking? Once closed, items selection and billing totals will be locked permanently and cannot be modified."
-        confirmLabel="Close Event"
+        message="Are you sure you want to close and lock this event booking? Once closed, billing totals will be locked permanently, the PDF invoice will be saved in cache, and opened for WhatsApp sharing."
+        confirmLabel="Close & Share Bill"
         cancelLabel="Keep Open"
         onConfirm={() => closeEventMutation.mutate()}
         onCancel={() => setCloseDialogVisible(false)}

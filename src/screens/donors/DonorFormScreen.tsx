@@ -13,7 +13,7 @@ import { AppHeader } from '../../components/AppHeader';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { DatePicker } from '../../components/DatePicker';
 import { RootStackParamList } from '../../navigation/types';
-import apiClient from '../../api/client';
+import { donorApi } from '../../api/services/donorApi';
 import { Donor } from '../../types';
 
 type RoutePropType = RouteProp<RootStackParamList, 'DonorForm'>;
@@ -44,8 +44,7 @@ export const DonorFormScreen: React.FC = () => {
       const fetchDonor = async () => {
         setLoadingInitial(true);
         try {
-          const res = await apiClient.get(`/donors/${editId}`);
-          const donor: Donor = res.data;
+          const donor: Donor = await donorApi.getDonorById(editId);
           reset({
             fullName: donor.fullName,
             amount: donor.amount.toString(),
@@ -62,6 +61,21 @@ export const DonorFormScreen: React.FC = () => {
     }
   }, [editId]);
 
+  const handleSuccessNavigation = () => {
+    if (editId) {
+      // If editing from details screen, pop 2 screens back (to the second last page / donor list)
+      const state = navigation.getState();
+      const routesLength = state?.routes?.length || 0;
+      if (routesLength >= 3 && typeof (navigation as any).pop === 'function') {
+        (navigation as any).pop(2);
+      } else {
+        navigation.goBack();
+      }
+    } else {
+      navigation.goBack();
+    }
+  };
+
   // Mutation to add/update donor
   const saveDonorMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -72,8 +86,7 @@ export const DonorFormScreen: React.FC = () => {
         donationDate: data.donationDate.toISOString(),
         remarks: data.remarks,
       };
-      const response = await apiClient.post('/donors', payload);
-      return response.data;
+      return await donorApi.createDonor(payload);
     },
     onSuccess: (data) => {
       // Invalidate queries to trigger refresh
@@ -84,9 +97,9 @@ export const DonorFormScreen: React.FC = () => {
       
       Alert.alert(
         'Success',
-        `Successfully saved donor: ${data.fullName}`,
+        `Successfully ${editId ? 'updated' : 'saved'} donor: ${data.fullName}`,
         [
-          { text: 'OK', onPress: () => navigation.goBack() }
+          { text: 'OK', onPress: () => handleSuccessNavigation() }
         ]
       );
     },
@@ -244,6 +257,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     padding: 20,
     borderRadius: 16,
+    width: '100%',
+    alignSelf: 'center',
+    borderWidth: Platform.OS === 'web' ? 1 : 0.5,
+    borderColor: themeColors.border,
     elevation: 2,
   },
   inputContainer: {

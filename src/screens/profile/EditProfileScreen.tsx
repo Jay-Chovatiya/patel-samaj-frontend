@@ -11,7 +11,7 @@ import { AppHeader } from '../../components/AppHeader';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { RootState } from '../../store';
 import { updateProfile } from '../../store/authSlice';
-import apiClient from '../../api/client';
+import { userApi } from '../../api/services/userApi';
 import { User, UserProfileDTO } from '../../types';
 
 export const EditProfileScreen: React.FC = () => {
@@ -25,13 +25,12 @@ export const EditProfileScreen: React.FC = () => {
     queryKey: ['user-profile'],
     queryFn: async () => {
       try {
-        const res = await apiClient.get('/user');
-        const data = res.data;
+        const data = await userApi.getUserProfile();
         if (!data) return { fullName: storeUser?.fullName || '', mobileNumber: storeUser?.mobileNumber || '', email: storeUser?.email || '' };
         return {
           fullName: data.fullName || storeUser?.fullName || '',
-          mobileNumber: data.mobileNumber || data.mobile || data.phone || storeUser?.mobileNumber || '',
-          email: data.email || data.emailAddress || storeUser?.email || '',
+          mobileNumber: (data as any).mobileNumber || (data as any).mobile || (data as any).phone || storeUser?.mobileNumber || '',
+          email: data.email || (data as any).emailAddress || storeUser?.email || '',
         };
       } catch {
         return {
@@ -76,20 +75,7 @@ export const EditProfileScreen: React.FC = () => {
         email: formData.email || '',
       };
       
-      let resData: any;
-      try {
-        resData = (await apiClient.put('/user/profile', payload)).data;
-      } catch (err: any) {
-        if (err?.response?.status === 404 || err?.response?.status === 405) {
-          try {
-            resData = (await apiClient.post('/profile', payload)).data;
-          } catch {
-            resData = (await apiClient.put('/user/profile', payload)).data;
-          }
-        } else {
-          throw err;
-        }
-      }
+      const resData = await userApi.updateProfile(payload);
 
       const updatedUser: User = {
         userId: Number(resData?.userId || resData?.id || storeUser?.userId || 1),

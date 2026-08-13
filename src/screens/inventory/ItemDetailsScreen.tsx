@@ -13,7 +13,7 @@ import { AppHeader } from '../../components/AppHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { ConfirmationDialog } from '../../components/ConfirmationDialog';
 import { RootStackParamList } from '../../navigation/types';
-import apiClient from '../../api/client';
+import { inventoryApi } from '../../api/services/inventoryApi';
 import { formatCurrency } from '../../utils/format';
 import { Item } from '../../types';
 
@@ -32,17 +32,11 @@ export const ItemDetailsScreen: React.FC = () => {
 
   const { data: item, isLoading, isError, refetch } = useQuery<Item>({
     queryKey: ['item', id],
-    queryFn: async () => {
-      const res = await apiClient.get(`/items/${id}`);
-      return res.data;
-    },
+    queryFn: () => inventoryApi.getItemById(id),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiClient.delete(`/items/${id}`);
-      return res.data;
-    },
+    mutationFn: () => inventoryApi.deleteItem(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['items'] });
       setDeleteVisible(false);

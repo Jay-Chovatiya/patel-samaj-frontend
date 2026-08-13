@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, ScrollView, RefreshControl } from 'react-native';
+import { StyleSheet, View, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
 import { Text, Card, Button, Badge, Banner, Snackbar } from 'react-native-paper';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -13,8 +13,9 @@ import { ConfirmationDialog } from '../../components/ConfirmationDialog';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../store';
 import { RootStackParamList } from '../../navigation/types';
-import apiClient from '../../api/client';
+import { eventApi } from '../../api/services/eventApi';
 import { formatCurrency, formatDate } from '../../utils/format';
+import { shareEventPdf, openWhatsAppDirectChat } from '../../utils/pdfShare';
 import { Event, EventStatus } from '../../types';
 
 type RoutePropType = RouteProp<RootStackParamList, 'EventDetails'>;
@@ -37,23 +38,36 @@ export const EventDetailsScreen: React.FC = () => {
 
   const { data: event, isLoading, isError, refetch } = useQuery<Event>({
     queryKey: ['event', id],
-    queryFn: async () => {
-      const res = await apiClient.get(`/events/${id}`);
-      return res.data;
-    },
+    queryFn: () => eventApi.getEventById(id),
   });
 
   // Close Event Mutation
   const closeEventMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiClient.put(`/events/close/${id}`);
-      return response.data;
-    },
-    onSuccess: () => {
+    mutationFn: () => eventApi.closeEvent(id),
+    onSuccess: async (pdfData: ArrayBuffer) => {
       queryClient.invalidateQueries({ queryKey: ['events'] });
       queryClient.invalidateQueries({ queryKey: ['event', id] });
       setCloseDialogVisible(false);
-      setSuccessMsg('Event closed successfully');
+
+      if (pdfData && event) {
+        const result = await shareEventPdf({
+          pdfData,
+          eventId: id,
+          contactNumber: event.contactNumber,
+          familyHeadName: event.familyHeadName,
+          eventType: event.eventType,
+        });
+
+        if (result.downloadedToDevice) {
+          setSuccessMsg(result.message || 'Bill PDF downloaded to device successfully');
+        } else if (result.success) {
+          setSuccessMsg('Event closed & bill ready for sharing');
+        } else {
+          setSuccessMsg('Event closed successfully');
+        }
+      } else {
+        setSuccessMsg('Event closed successfully');
+      }
     },
     onError: (err: any) => {
       setErrorMsg(err.userMessage || 'Failed to close event');
@@ -69,8 +83,7 @@ export const EventDetailsScreen: React.FC = () => {
         ...event,
         statusId: newStatusId,
       };
-      const response = await apiClient.put('/events', payload);
-      return response.data;
+      return await eventApi.updateEvent(payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['events'] });
@@ -213,7 +226,21 @@ export const EventDetailsScreen: React.FC = () => {
             </View>
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Contact Number</Text>
-              <Text style={styles.infoValue}>{event.contactNumber}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={styles.infoValue}>{event.contactNumber}</Text>
+                {event.contactNumber ? (
+                  <TouchableOpacity
+                    onPress={() => openWhatsAppDirectChat(
+                      event.contactNumber,
+                      `Hello ${event.familyHeadName}, regarding your event booking (${event.eventType})...`
+                    )}
+                    style={{ marginLeft: 8 }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <MaterialCommunityIcons name="whatsapp" size={20} color="#25D366" />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
             </View>
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Email Address</Text>
@@ -351,8 +378,8 @@ export const EventDetailsScreen: React.FC = () => {
       <ConfirmationDialog
         visible={closeDialogVisible}
         title="Close Event Billing"
-        message="Are you sure you want to close and lock this event booking? Once closed, items selection and billing totals will be locked permanently and cannot be modified."
-        confirmLabel="Close Event"
+        message={`Are you sure you want to close and lock this event booking? Once closed, billing totals will be locked permanently, the PDF invoice will be saved in cache, and opened for WhatsApp sharing${event?.contactNumber ? ` to ${event.contactNumber}` : ''}.`}
+        confirmLabel="Close & Share Bill"
         cancelLabel="Keep Open"
         onConfirm={handleCloseEvent}
         onCancel={() => setCloseDialogVisible(false)}
