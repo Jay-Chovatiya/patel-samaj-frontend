@@ -47,7 +47,21 @@ export const extractErrorMessage = (error: any): string => {
 
   const response = error.response;
   if (response && response.data) {
-    const data = response.data;
+    let data = response.data;
+
+    // Handle binary responses (e.g. ArrayBuffer or Uint8Array) when responseType is 'arraybuffer'
+    if (data instanceof ArrayBuffer || (typeof ArrayBuffer !== 'undefined' && ArrayBuffer.isView(data))) {
+      try {
+        const text = new TextDecoder('utf-8').decode(data);
+        data = JSON.parse(text);
+      } catch {
+        try {
+          data = new TextDecoder('utf-8').decode(data);
+        } catch {
+          // ignore decoding failure
+        }
+      }
+    }
 
     // 1. Plain String error response (Exception.class)
     if (typeof data === 'string' && data.trim().length > 0 && !data.trim().startsWith('<html')) {

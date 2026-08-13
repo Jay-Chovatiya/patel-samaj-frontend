@@ -37,8 +37,10 @@ export const eventApi = {
     return res.data;
   },
 
-  closeEvent: async (id: string): Promise<any> => {
-    const res = await apiClient.put(`/events/close/${id}`);
+  closeEvent: async (id: string): Promise<ArrayBuffer> => {
+    const res = await apiClient.put<ArrayBuffer>(`/events/${id}/close`, null, {
+      responseType: 'arraybuffer',
+    });
     return res.data;
   },
 };

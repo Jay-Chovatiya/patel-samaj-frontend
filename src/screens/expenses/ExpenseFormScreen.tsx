@@ -13,7 +13,7 @@ import { AppHeader } from '../../components/AppHeader';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { DatePicker } from '../../components/DatePicker';
 import { RootStackParamList } from '../../navigation/types';
-import apiClient from '../../api/client';
+import { expenseApi } from '../../api/services/expenseApi';
 import { Expense } from '../../types';
 
 type RoutePropType = RouteProp<RootStackParamList, 'ExpenseForm'>;
@@ -44,8 +44,7 @@ export const ExpenseFormScreen: React.FC = () => {
       const fetchExpense = async () => {
         setLoadingInitial(true);
         try {
-          const res = await apiClient.get(`/expenses/${editId}`);
-          const expense: Expense = res.data;
+          const expense: Expense = await expenseApi.getExpenseById(editId);
           reset({
             description: expense.description || '',
             amount: expense.amount.toString(),
@@ -72,8 +71,7 @@ export const ExpenseFormScreen: React.FC = () => {
         category: data.category || '',
         description: data.description,
       };
-      const response = await apiClient.post('/expenses', payload);
-      return response.data;
+      return await expenseApi.createExpense(payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['expenses'] });

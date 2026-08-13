@@ -8,7 +8,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { themeColors } from '../../theme';
 import { AppHeader } from '../../components/AppHeader';
 import { PrimaryButton } from '../../components/PrimaryButton';
-import apiClient, { extractErrorMessage } from '../../api/client';
+import { userApi } from '../../api/services/userApi';
+import { extractErrorMessage } from '../../api/client';
 import { UserProfileDTO } from '../../types';
 
 export const InviteAdminScreen: React.FC = () => {
@@ -33,8 +34,7 @@ export const InviteAdminScreen: React.FC = () => {
         mobileNumber: data.mobileNumber,
         email: data.email || '',
       };
-      const response = await apiClient.post('/user/inviteAdmin', payload);
-      return response.data;
+      return await userApi.inviteAdmin(payload);
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['admins'] });

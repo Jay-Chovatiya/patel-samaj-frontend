@@ -12,7 +12,7 @@ import { themeColors } from '../../theme';
 import { AppHeader } from '../../components/AppHeader';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { RootStackParamList } from '../../navigation/types';
-import apiClient from '../../api/client';
+import { inventoryApi } from '../../api/services/inventoryApi';
 import { Item } from '../../types';
 
 type RoutePropType = RouteProp<RootStackParamList, 'ItemForm'>;
@@ -43,8 +43,7 @@ export const ItemFormScreen: React.FC = () => {
       const fetchItem = async () => {
         setLoadingInitial(true);
         try {
-          const res = await apiClient.get(`/items/${editId}`);
-          const item: Item = res.data;
+          const item: Item = await inventoryApi.getItemById(editId);
           reset({
             name: item.itemName,
             price: item.currentPrice.toString(),
@@ -71,8 +70,7 @@ export const ItemFormScreen: React.FC = () => {
         description: data.description,
         isAvailable: data.isAvailable,
       };
-      const response = await apiClient.post('/items', payload);
-      return response.data;
+      return await inventoryApi.createItem(payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['items'] });
