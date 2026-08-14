@@ -8,7 +8,8 @@ import { useDispatch, useSelector } from 'react-redux';
 
 import { themeColors } from '../../theme';
 import { AppHeader } from '../../components/AppHeader';
-import { PrimaryButton } from '../../components/PrimaryButton';
+import { FormActionButtons } from '../../components/FormActionButtons';
+import { showGlobalToast } from '../../context/ToastContext';
 import { RootState } from '../../store';
 import { updateProfile } from '../../store/authSlice';
 import { userApi } from '../../api/services/userApi';
@@ -97,7 +98,7 @@ export const EditProfileScreen: React.FC = () => {
 
   const onSubmit = (formData: UserProfileDTO) => {
     if (!isAdmin) {
-      alert('Only Admin users can edit profile information.');
+      showGlobalToast({ message: 'Only Admin users can edit profile information.', type: 'error' });
       return;
     }
     updateProfileMutation.mutate(formData);
@@ -203,24 +204,13 @@ export const EditProfileScreen: React.FC = () => {
               )}
             />
 
-            <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 16 }}>
-              <Button
-                mode="outlined"
-                onPress={() => navigation.goBack()}
-                textColor={themeColors.textMuted}
-                style={{ borderRadius: 8, height: 48, justifyContent: 'center', borderColor: themeColors.border, paddingHorizontal: 16, minWidth: 120 }}
-                disabled={updateProfileMutation.isPending}
-              >
-                CANCEL
-              </Button>
-              <PrimaryButton
-                onPress={handleSubmit(onSubmit)}
-                loading={updateProfileMutation.isPending}
-                style={{ marginVertical: 0, minWidth: 140 }}
-              >
-                SAVE CHANGES
-              </PrimaryButton>
-            </View>
+            <FormActionButtons
+              onSubmit={handleSubmit(onSubmit)}
+              onCancel={() => navigation.goBack()}
+              submitLabel="SAVE CHANGES"
+              loading={updateProfileMutation.isPending}
+              disabled={updateProfileMutation.isPending}
+            />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

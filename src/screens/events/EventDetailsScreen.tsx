@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
-import { Text, Card, Button, Badge, Banner, Snackbar } from 'react-native-paper';
+import { Text, Card, Button, Badge, Banner } from 'react-native-paper';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -10,6 +10,7 @@ import { themeColors, shadows } from '../../theme';
 import { AppHeader } from '../../components/AppHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { ConfirmationDialog } from '../../components/ConfirmationDialog';
+import { showGlobalToast } from '../../context/ToastContext';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../store';
 import { RootStackParamList } from '../../navigation/types';
@@ -33,8 +34,6 @@ export const EventDetailsScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [statusDialogVisible, setStatusDialogVisible] = useState(false);
   const [pendingStatusId, setPendingStatusId] = useState<number | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const { data: event, isLoading, isError, refetch } = useQuery<Event>({
     queryKey: ['event', id],
@@ -59,18 +58,18 @@ export const EventDetailsScreen: React.FC = () => {
         });
 
         if (result.downloadedToDevice) {
-          setSuccessMsg(result.message || 'Bill PDF downloaded to device successfully');
+          showGlobalToast({ message: result.message || 'Bill PDF downloaded to device successfully', type: 'success' });
         } else if (result.success) {
-          setSuccessMsg('Event closed & bill ready for sharing');
+          showGlobalToast({ message: 'Event closed & bill ready for sharing', type: 'success' });
         } else {
-          setSuccessMsg('Event closed successfully');
+          showGlobalToast({ message: 'Event closed successfully', type: 'success' });
         }
       } else {
-        setSuccessMsg('Event closed successfully');
+        showGlobalToast({ message: 'Event closed successfully', type: 'success' });
       }
     },
     onError: (err: any) => {
-      setErrorMsg(err.userMessage || 'Failed to close event');
+      showGlobalToast({ message: err.userMessage || 'Failed to close event', type: 'error' });
       setCloseDialogVisible(false);
     }
   });
@@ -89,10 +88,10 @@ export const EventDetailsScreen: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['events'] });
       queryClient.invalidateQueries({ queryKey: ['event', id] });
       setStatusDialogVisible(false);
-      setSuccessMsg('Status updated successfully');
+      showGlobalToast({ message: 'Status updated successfully', type: 'success' });
     },
     onError: (err: any) => {
-      setErrorMsg(err.userMessage || 'Failed to update status');
+      showGlobalToast({ message: err.userMessage || 'Failed to update status', type: 'error' });
       setStatusDialogVisible(false);
     }
   });
@@ -314,13 +313,13 @@ export const EventDetailsScreen: React.FC = () => {
         {!isClosed && !isCancelled && (
           <View style={styles.actionContainer}>
             {event.statusId === EventStatus.PENDING && isAdmin && (
-              <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
                 <Button
                   mode="contained"
                   onPress={() => confirmStatusChange(EventStatus.APPROVED)}
                   buttonColor={themeColors.success}
                   icon="check-circle-outline"
-                  style={{ paddingHorizontal: 16 }}
+                  style={{ paddingHorizontal: 16, flex: 1, minWidth: 140 }}
                   disabled={updateStatusMutation.isPending || closeEventMutation.isPending}
                 >
                   APPROVE EVENT
@@ -330,7 +329,7 @@ export const EventDetailsScreen: React.FC = () => {
                   onPress={() => confirmStatusChange(EventStatus.REJECTED)}
                   buttonColor={themeColors.error}
                   icon="close-circle-outline"
-                  style={{ paddingHorizontal: 16 }}
+                  style={{ paddingHorizontal: 16, flex: 1, minWidth: 140 }}
                   disabled={updateStatusMutation.isPending || closeEventMutation.isPending}
                 >
                   REJECT EVENT
@@ -396,25 +395,6 @@ export const EventDetailsScreen: React.FC = () => {
         onCancel={() => setStatusDialogVisible(false)}
         loading={updateStatusMutation.isPending}
       />
-
-      <Snackbar
-        visible={!!successMsg}
-        onDismiss={() => setSuccessMsg(null)}
-        duration={3000}
-        style={{ backgroundColor: themeColors.success }}
-      >
-        {successMsg}
-      </Snackbar>
-
-      <Snackbar
-        visible={!!errorMsg}
-        onDismiss={() => setErrorMsg(null)}
-        duration={4000}
-        style={{ backgroundColor: themeColors.error }}
-        action={{ label: 'Close', onPress: () => setErrorMsg(null) }}
-      >
-        {errorMsg}
-      </Snackbar>
     </View>
   );
 };

@@ -10,8 +10,9 @@ import { useSelector } from 'react-redux';
 import { RootState } from '../../store';
 import { themeColors } from '../../theme';
 import { AppHeader } from '../../components/AppHeader';
-import { PrimaryButton } from '../../components/PrimaryButton';
 import { DatePicker } from '../../components/DatePicker';
+import { FormActionButtons } from '../../components/FormActionButtons';
+import { showGlobalToast } from '../../context/ToastContext';
 import { RootStackParamList } from '../../navigation/types';
 import { expenseApi } from '../../api/services/expenseApi';
 import { Expense } from '../../types';
@@ -84,7 +85,7 @@ export const ExpenseFormScreen: React.FC = () => {
 
   const onSubmit = (data: any) => {
     if (!isAdmin) {
-      alert('Only Admin users can add or edit expense records.');
+      showGlobalToast({ message: 'Only Admin users can add or edit expense records.', type: 'error' });
       return;
     }
     saveMutation.mutate(data);
@@ -194,24 +195,13 @@ export const ExpenseFormScreen: React.FC = () => {
 
 
 
-            <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 16 }}>
-              <Button
-                mode="outlined"
-                onPress={() => navigation.goBack()}
-                textColor={themeColors.textMuted}
-                style={{ borderRadius: 8, height: 48, justifyContent: 'center', borderColor: themeColors.border, paddingHorizontal: 16, minWidth: 120 }}
-                disabled={saveMutation.isPending || loadingInitial}
-              >
-                CANCEL
-              </Button>
-              <PrimaryButton
-                onPress={handleSubmit(onSubmit)}
-                loading={saveMutation.isPending || loadingInitial}
-                style={{ marginVertical: 0, minWidth: 140 }}
-              >
-                {editId ? 'UPDATE TRANSACTION' : 'SAVE TRANSACTION'}
-              </PrimaryButton>
-            </View>
+            <FormActionButtons
+              onSubmit={handleSubmit(onSubmit)}
+              onCancel={() => navigation.goBack()}
+              submitLabel={editId ? 'UPDATE TRANSACTION' : 'SAVE TRANSACTION'}
+              loading={saveMutation.isPending || loadingInitial}
+              disabled={saveMutation.isPending || loadingInitial}
+            />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

@@ -1,6 +1,8 @@
 import axios from 'axios';
 import { store } from '../store';
 import { logoutAction } from '../store/authSlice';
+import { isTokenExpired, clearStoredToken } from '../utils/tokenManager';
+import { showGlobalToast } from '../context/ToastContext';
 
 export const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8080/api';
 
@@ -15,17 +17,29 @@ const apiClient = axios.create({
 // Interceptor to inject bearer token
 apiClient.interceptors.request.use(
   (config) => {
+    const isPublic =
+      config.url &&
+      (config.url.includes('/auth/login') ||
+        config.url.includes('/auth/forgot-password'));
+
+    if (isPublic) {
+      return config;
+    }
+
     const state = store.getState();
     const token = state.auth?.token;
+    const expiresAt = state.auth?.expiresAt;
 
-    const isPublic = config.url && (
-      config.url.includes('/auth/login') || 
-      config.url.includes('/auth/logout') || 
-      config.url.includes('/auth/forgot-password')
-    );
+    if (token) {
+      // Check if the 24-hour token or JWT expiry has passed
+      if (isTokenExpired(token, expiresAt)) {
+        clearStoredToken();
+        store.dispatch(logoutAction());
+        const expiryError = new Error('Session has expired. Please log in again.');
+        (expiryError as any).userMessage = 'Session has expired. Please log in again.';
+        return Promise.reject(expiryError);
+      }
 
-    // Set Authorization header for all non-public requests if token exists
-    if (!isPublic && token && config.method) {
       if (config.headers) {
         if (typeof config.headers.set === 'function') {
           config.headers.set('Authorization', `Bearer ${token}`);
@@ -96,17 +110,132 @@ export const extractErrorMessage = (error: any): string => {
   return error.message || 'An unexpected error occurred.';
 };
 
-// Interceptor to handle global errors (like 401)
+export const extractSuccessMessage = (response: any): string => {
+  if (!response) return 'Operation completed successfully.';
+
+  const data = response.data;
+  const config = response.config || {};
+  const url = config.url || '';
+  const method = (config.method || 'get').toLowerCase();
+
+  // 1. Plain string message
+  if (typeof data === 'string' && data.trim().length > 0 && !data.trim().startsWith('<html') && data.trim().length < 200) {
+    return data.trim();
+  }
+
+  // 2. Object with message / msg / success property
+  if (typeof data === 'object' && data !== null) {
+    if (typeof data.message === 'string' && data.message.trim()) {
+      return data.message.trim();
+    }
+    if (typeof data.msg === 'string' && data.msg.trim()) {
+      return data.msg.trim();
+    }
+    if (typeof data.success === 'string' && data.success.trim()) {
+      return data.success.trim();
+    }
+  }
+
+  // 3. Contextual fallback based on endpoint and method
+  if (url.includes('/auth/login')) {
+    return 'Logged in successfully.';
+  }
+  if (url.includes('/auth/forgot-password')) {
+    return 'Password reset instructions sent successfully.';
+  }
+  if (url.includes('/auth/logout')) {
+    return 'Logged out successfully.';
+  }
+  if (url.includes('/user/inviteAdmin')) {
+    return 'Admin invitation sent successfully.';
+  }
+  if (url.includes('/user/change-password')) {
+    return 'Password changed successfully.';
+  }
+  if (url.includes('/user/profile') || url.includes('/profile')) {
+    return 'Profile updated successfully.';
+  }
+  if (url.includes('/user/toggle')) {
+    return 'Admin status updated successfully.';
+  }
+  if (url.includes('/events') && url.includes('/close')) {
+    return 'Event closed and bill finalized successfully.';
+  }
+
+  if (url.includes('/donors')) {
+    if (method === 'delete') return 'Donor deleted successfully.';
+    if (method === 'post') {
+      return data && typeof data === 'object' && data.fullName
+        ? `Donor "${data.fullName}" saved successfully.`
+        : 'Donor saved successfully.';
+    }
+  }
+
+  if (url.includes('/events')) {
+    if (method === 'delete') return 'Event deleted successfully.';
+    if (method === 'post') return 'Event booking created successfully.';
+    if (method === 'put') return 'Event booking updated successfully.';
+  }
+
+  if (url.includes('/items')) {
+    if (method === 'delete') return 'Inventory item deleted successfully.';
+    if (method === 'post' || method === 'put') {
+      return data && typeof data === 'object' && data.itemName
+        ? `Item "${data.itemName}" saved successfully.`
+        : 'Inventory item saved successfully.';
+    }
+  }
+
+  if (url.includes('/expenses')) {
+    if (method === 'delete') return 'Expense record deleted successfully.';
+    if (method === 'post' || method === 'put') return 'Expense recorded successfully.';
+  }
+
+  if (method === 'delete') return 'Deleted successfully.';
+  if (method === 'post' || method === 'put' || method === 'patch') return 'Saved successfully.';
+
+  return 'Operation completed successfully.';
+};
+
+// Interceptor to handle global responses & errors
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const config = response.config || {};
+    const method = (config.method || 'get').toLowerCase();
+    const url = config.url || '';
+
+    // Check if this is a mutating request (POST, PUT, PATCH, DELETE)
+    const isMutating = ['post', 'put', 'patch', 'delete'].includes(method);
+    // Ignore pagination list queries like /donors/list, /events/list, /expenses/list, /user/list
+    const isListQuery = url.endsWith('/list') || url.includes('/list?');
+    const suppressToast =
+      config.headers?.['x-suppress-toast'] === 'true' ||
+      config.headers?.['x-suppress-toast'] === true;
+
+    if (isMutating && !isListQuery && !suppressToast) {
+      const message = extractSuccessMessage(response);
+      showGlobalToast({ message, type: 'success' });
+    }
+
+    return response;
+  },
   (error) => {
     if (error.response?.status === 401) {
       // Automatic logout on token expiration / unauthorized
+      clearStoredToken();
       store.dispatch(logoutAction());
     }
 
     // Attach extracted user-friendly error message
-    error.userMessage = extractErrorMessage(error);
+    error.userMessage = error.userMessage || extractErrorMessage(error);
+
+    const suppressToast =
+      error.config?.headers?.['x-suppress-toast'] === 'true' ||
+      error.config?.headers?.['x-suppress-toast'] === true;
+
+    if (!suppressToast) {
+      showGlobalToast({ message: error.userMessage, type: 'error' });
+    }
 
     return Promise.reject(error);
   }

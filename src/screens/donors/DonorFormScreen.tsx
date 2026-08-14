@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, ScrollView, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { StyleSheet, View, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { TextInput, HelperText, Button } from 'react-native-paper';
 import { useForm, Controller } from 'react-hook-form';
-import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
+import { useRoute, useNavigation, RouteProp, StackActions } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
@@ -10,8 +10,9 @@ import { useSelector } from 'react-redux';
 import { RootState } from '../../store';
 import { themeColors } from '../../theme';
 import { AppHeader } from '../../components/AppHeader';
-import { PrimaryButton } from '../../components/PrimaryButton';
 import { DatePicker } from '../../components/DatePicker';
+import { FormActionButtons } from '../../components/FormActionButtons';
+import { showGlobalToast } from '../../context/ToastContext';
 import { RootStackParamList } from '../../navigation/types';
 import { donorApi } from '../../api/services/donorApi';
 import { Donor } from '../../types';
@@ -64,12 +65,14 @@ export const DonorFormScreen: React.FC = () => {
   const handleSuccessNavigation = () => {
     if (editId) {
       // If editing from details screen, pop 2 screens back (to the second last page / donor list)
-      const state = navigation.getState();
-      const routesLength = state?.routes?.length || 0;
-      if (routesLength >= 3 && typeof (navigation as any).pop === 'function') {
-        (navigation as any).pop(2);
-      } else {
+      const navState = navigation.getState();
+      const currentIndex = navState?.index ?? 0;
+      if (currentIndex >= 2) {
+        navigation.dispatch(StackActions.pop(2));
+      } else if (navigation.canGoBack()) {
         navigation.goBack();
+      } else {
+        navigation.navigate('DonorList' as any);
       }
     } else {
       navigation.goBack();
@@ -88,29 +91,21 @@ export const DonorFormScreen: React.FC = () => {
       };
       return await donorApi.createDonor(payload);
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       // Invalidate queries to trigger refresh
       queryClient.invalidateQueries({ queryKey: ['donors'] });
       if (editId) {
         queryClient.invalidateQueries({ queryKey: ['donor', editId] });
       }
       
-      Alert.alert(
-        'Success',
-        `Successfully ${editId ? 'updated' : 'saved'} donor: ${data.fullName}`,
-        [
-          { text: 'OK', onPress: () => handleSuccessNavigation() }
-        ]
-      );
-    },
-    onError: (error: any) => {
-      Alert.alert('Error', error?.userMessage || 'Failed to save donor. Please try again.');
+      // Instantly redirect to second last page on edit, or previous page on add
+      handleSuccessNavigation();
     },
   });
 
   const onSubmit = (data: any) => {
     if (!isAdmin) {
-      Alert.alert('Permission Denied', 'Only Admin users can add or edit donor details.');
+      showGlobalToast({ message: 'Only Admin users can add or edit donor details.', type: 'error' });
       return;
     }
     saveDonorMutation.mutate(data);
@@ -220,24 +215,13 @@ export const DonorFormScreen: React.FC = () => {
               )}
             />
 
-            <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 16 }}>
-              <Button
-                mode="outlined"
-                onPress={() => navigation.goBack()}
-                textColor={themeColors.textMuted}
-                style={{ borderRadius: 8, height: 48, justifyContent: 'center', borderColor: themeColors.border, paddingHorizontal: 16, minWidth: 120 }}
-                disabled={saveDonorMutation.isPending || loadingInitial}
-              >
-                CANCEL
-              </Button>
-              <PrimaryButton
-                onPress={handleSubmit(onSubmit)}
-                loading={saveDonorMutation.isPending || loadingInitial}
-                style={{ marginVertical: 0, minWidth: 140 }}
-              >
-                {editId ? 'UPDATE DONOR' : 'SAVE DONOR'}
-              </PrimaryButton>
-            </View>
+            <FormActionButtons
+              onSubmit={handleSubmit(onSubmit)}
+              onCancel={() => navigation.goBack()}
+              submitLabel={editId ? 'UPDATE DONOR' : 'SAVE DONOR'}
+              loading={saveDonorMutation.isPending || loadingInitial}
+              disabled={saveDonorMutation.isPending || loadingInitial}
+            />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
