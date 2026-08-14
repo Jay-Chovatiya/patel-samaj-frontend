@@ -1,23 +1,19 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { StyleSheet, View, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
-import { TextInput, HelperText, Snackbar, Button } from 'react-native-paper';
+import { TextInput, HelperText } from 'react-native-paper';
 import { useForm, Controller } from 'react-hook-form';
 import { useNavigation } from '@react-navigation/native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { themeColors } from '../../theme';
 import { AppHeader } from '../../components/AppHeader';
-import { PrimaryButton } from '../../components/PrimaryButton';
+import { FormActionButtons } from '../../components/FormActionButtons';
 import { userApi } from '../../api/services/userApi';
-import { extractErrorMessage } from '../../api/client';
 import { UserProfileDTO } from '../../types';
 
 export const InviteAdminScreen: React.FC = () => {
   const navigation = useNavigation();
   const queryClient = useQueryClient();
-
-  const [toastMsg, setToastMsg] = useState<string | null>(null);
-  const [toastError, setToastError] = useState<boolean>(false);
 
   const { control, handleSubmit, formState: { errors } } = useForm<UserProfileDTO>({
     defaultValues: {
@@ -36,27 +32,14 @@ export const InviteAdminScreen: React.FC = () => {
       };
       return await userApi.inviteAdmin(payload);
     },
-    onSuccess: (data: any) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admins'] });
       queryClient.invalidateQueries({ queryKey: ['users'] });
-      const successMessage = typeof data === 'string' && data.trim()
-        ? data
-        : (data?.message || 'Admin invitation sent successfully!');
-      setToastError(false);
-      setToastMsg(successMessage);
-      setTimeout(() => {
-        navigation.goBack();
-      }, 1500);
-    },
-    onError: (err: any) => {
-      const errorMessage = err?.userMessage || extractErrorMessage(err);
-      setToastError(true);
-      setToastMsg(errorMessage);
+      navigation.goBack();
     },
   });
 
   const onSubmit = (data: UserProfileDTO) => {
-    setToastMsg(null);
     inviteAdminMutation.mutate(data);
   };
 
@@ -160,40 +143,16 @@ export const InviteAdminScreen: React.FC = () => {
               )}
             />
 
-            <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 16 }}>
-              <Button
-                mode="outlined"
-                onPress={() => navigation.goBack()}
-                textColor={themeColors.textMuted}
-                style={{ borderRadius: 8, height: 48, justifyContent: 'center', borderColor: themeColors.border, paddingHorizontal: 16, minWidth: 120 }}
-                disabled={inviteAdminMutation.isPending}
-              >
-                CANCEL
-              </Button>
-              <PrimaryButton
-                onPress={handleSubmit(onSubmit)}
-                loading={inviteAdminMutation.isPending}
-                style={{ marginVertical: 0, minWidth: 140 }}
-              >
-                SEND INVITATION
-              </PrimaryButton>
-            </View>
+            <FormActionButtons
+              onSubmit={handleSubmit(onSubmit)}
+              onCancel={() => navigation.goBack()}
+              submitLabel="SEND INVITATION"
+              loading={inviteAdminMutation.isPending}
+              disabled={inviteAdminMutation.isPending}
+            />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-
-      <Snackbar
-        visible={!!toastMsg}
-        onDismiss={() => setToastMsg(null)}
-        duration={4000}
-        style={{ backgroundColor: toastError ? themeColors.error : themeColors.success }}
-        action={{
-          label: 'OK',
-          onPress: () => setToastMsg(null),
-        }}
-      >
-        {toastMsg}
-      </Snackbar>
     </View>
   );
 };
@@ -217,9 +176,6 @@ const styles = StyleSheet.create({
   },
   input: {
     backgroundColor: '#FFFFFF',
-  },
-  saveBtn: {
-    marginTop: 20,
   },
 });
 

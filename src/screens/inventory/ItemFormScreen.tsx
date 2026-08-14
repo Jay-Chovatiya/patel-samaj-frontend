@@ -10,7 +10,8 @@ import { useSelector } from 'react-redux';
 import { RootState } from '../../store';
 import { themeColors } from '../../theme';
 import { AppHeader } from '../../components/AppHeader';
-import { PrimaryButton } from '../../components/PrimaryButton';
+import { FormActionButtons } from '../../components/FormActionButtons';
+import { showGlobalToast } from '../../context/ToastContext';
 import { RootStackParamList } from '../../navigation/types';
 import { inventoryApi } from '../../api/services/inventoryApi';
 import { Item } from '../../types';
@@ -83,7 +84,7 @@ export const ItemFormScreen: React.FC = () => {
 
   const onSubmit = (data: any) => {
     if (!isAdmin) {
-      alert('Only Admin users can add or edit inventory items.');
+      showGlobalToast({ message: 'Only Admin users can add or edit inventory items.', type: 'error' });
       return;
     }
     saveItemMutation.mutate(data);
@@ -196,24 +197,13 @@ export const ItemFormScreen: React.FC = () => {
               )}
             />
 
-            <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 16 }}>
-              <Button
-                mode="outlined"
-                onPress={() => navigation.goBack()}
-                textColor={themeColors.textMuted}
-                style={{ borderRadius: 8, height: 48, justifyContent: 'center', borderColor: themeColors.border, paddingHorizontal: 16, minWidth: 120 }}
-                disabled={saveItemMutation.isPending || loadingInitial}
-              >
-                CANCEL
-              </Button>
-              <PrimaryButton
-                onPress={handleSubmit(onSubmit)}
-                loading={saveItemMutation.isPending || loadingInitial}
-                style={{ marginVertical: 0, minWidth: 140 }}
-              >
-                {editId ? 'UPDATE ITEM' : 'SAVE ITEM'}
-              </PrimaryButton>
-            </View>
+            <FormActionButtons
+              onSubmit={handleSubmit(onSubmit)}
+              onCancel={() => navigation.goBack()}
+              submitLabel={editId ? 'UPDATE ITEM' : 'SAVE ITEM'}
+              loading={saveItemMutation.isPending || loadingInitial}
+              disabled={saveItemMutation.isPending || loadingInitial}
+            />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

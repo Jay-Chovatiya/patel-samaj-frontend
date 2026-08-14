@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, KeyboardAvoidingView, ScrollView, Platform, TouchableOpacity } from 'react-native';
-import { Text, TextInput, Checkbox, Snackbar, HelperText, Button } from 'react-native-paper';
+import { Text, TextInput, Checkbox, HelperText, Button } from 'react-native-paper';
 import { useForm, Controller } from 'react-hook-form';
 import { useDispatch, useSelector } from 'react-redux';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 
@@ -11,6 +10,7 @@ import { themeColors } from '../../theme';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { RootState } from '../../store';
 import { setCredentials, setRememberedMobile } from '../../store/authSlice';
+import { setStoredToken } from '../../utils/tokenManager';
 import { authApi } from '../../api/services/authApi';
 import { userApi } from '../../api/services/userApi';
 import { RootStackParamList } from '../../navigation/types';
@@ -28,7 +28,7 @@ export const LoginScreen: React.FC = () => {
   const [secureText, setSecureText] = useState(true);
   const [rememberMe, setRememberMe] = useState(!!rememberedMobile);
   const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [focusedField, setFocusedField] = useState<string | null>(null);
 
   const { control, handleSubmit, setValue, formState: { errors } } = useForm({
     defaultValues: {
@@ -45,7 +45,6 @@ export const LoginScreen: React.FC = () => {
 
   const performLogin = async (data: { mobileNumber: string; password: string }) => {
     setLoading(true);
-    setErrorMsg(null);
     try {
       // API call to authenticate
       const loginData = await authApi.login({
@@ -65,7 +64,7 @@ export const LoginScreen: React.FC = () => {
       }
 
       // Store JWT Token in AsyncStorage
-      await AsyncStorage.setItem('jwt_token', token);
+      await setStoredToken(token);
 
       // Save initial token into Redux so interceptor picks up Bearer token
       dispatch(setCredentials({ token, user: null as any, isAdmin: false }));
@@ -122,8 +121,7 @@ export const LoginScreen: React.FC = () => {
         index: 0,
         routes: [{ name: 'MainTabs' }],
       });
-    } catch (err: any) {
-      setErrorMsg(err.userMessage || 'Invalid credentials. Please try again.');
+    } catch {
     } finally {
       setLoading(false);
     }
@@ -205,10 +203,6 @@ export const LoginScreen: React.FC = () => {
               name="password"
               rules={{
                 required: 'Password is required',
-                minLength: {
-                  value: 6,
-                  message: 'Password must be at least 6 characters',
-                },
               }}
               render={({ field: { onChange, onBlur, value } }) => (
                 <View style={styles.inputContainer}>
@@ -280,18 +274,6 @@ export const LoginScreen: React.FC = () => {
             </Button>
           </View>
         </View>
-
-        <Snackbar
-          visible={!!errorMsg}
-          onDismiss={() => setErrorMsg(null)}
-          action={{
-            label: 'Close',
-            onPress: () => setErrorMsg(null),
-          }}
-          style={styles.errorSnackbar}
-        >
-          {errorMsg}
-        </Snackbar>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -384,6 +366,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
     marginVertical: 10,
   },
   checkboxContainer: {
@@ -414,9 +398,6 @@ const styles = StyleSheet.create({
   },
   demoBtnContent: {
     height: 46,
-  },
-  errorSnackbar: {
-    backgroundColor: themeColors.error,
   },
 });
 

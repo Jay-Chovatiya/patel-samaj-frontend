@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, KeyboardAvoidingView, ScrollView, Platform, TouchableOpacity } from 'react-native';
-import { Text, TextInput, Snackbar, HelperText, Button } from 'react-native-paper';
+import { StyleSheet, View, KeyboardAvoidingView, ScrollView, Platform } from 'react-native';
+import { Text, TextInput, HelperText, Button } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useForm, Controller } from 'react-hook-form';
 import { useNavigation } from '@react-navigation/native';
@@ -17,8 +17,6 @@ type NavigationProp = StackNavigationProp<RootStackParamList, 'ForgotPassword'>;
 export const ForgotPasswordScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const [loading, setLoading] = useState(false);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const { control, handleSubmit, formState: { errors } } = useForm({
     defaultValues: {
@@ -26,26 +24,16 @@ export const ForgotPasswordScreen: React.FC = () => {
     },
   });
 
-  const onSubmit = async (data: any) => {
+  const onSubmit = async (data: { email: string }) => {
     setLoading(true);
-    setErrorMsg(null);
-    setSuccessMsg(null);
     try {
       await authApi.forgotPassword(data.email);
-      setSuccessMsg('If that email exists, a new password has been sent.');
-    } catch (err: any) {
-      setErrorMsg(err.userMessage || 'An error occurred. Please try again.');
+      setTimeout(() => {
+        navigation.navigate('Login');
+      }, 1000);
+    } catch {
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleSnackbarDismiss = () => {
-    if (successMsg) {
-      setSuccessMsg(null);
-      navigation.navigate('Login');
-    } else {
-      setErrorMsg(null);
     }
   };
 
@@ -130,19 +118,6 @@ export const ForgotPasswordScreen: React.FC = () => {
               </Button>
             </View>
           </View>
-
-          <Snackbar
-            visible={!!successMsg || !!errorMsg}
-            onDismiss={handleSnackbarDismiss}
-            duration={4000}
-            action={{
-              label: 'OK',
-              onPress: handleSnackbarDismiss,
-            }}
-            style={successMsg ? styles.successSnackbar : styles.errorSnackbar}
-          >
-            {successMsg || errorMsg}
-          </Snackbar>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -224,12 +199,6 @@ const styles = StyleSheet.create({
   backBtnLabel: {
     fontSize: 14,
     fontWeight: '600',
-  },
-  successSnackbar: {
-    backgroundColor: themeColors.success,
-  },
-  errorSnackbar: {
-    backgroundColor: themeColors.error,
   },
 });
 

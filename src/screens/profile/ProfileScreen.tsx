@@ -13,6 +13,7 @@ import { AppHeader } from '../../components/AppHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { ConfirmationDialog } from '../../components/ConfirmationDialog';
 import { logoutAction } from '../../store/authSlice';
+import { clearStoredToken } from '../../utils/tokenManager';
 import { RootState } from '../../store';
 import { RootStackParamList } from '../../navigation/types';
 import { userApi } from '../../api/services/userApi';
@@ -60,7 +61,7 @@ export const ProfileScreen: React.FC = () => {
       // Suppress network failure, clear auth local session anyway
     } finally {
       // Remove Token from storage
-      await AsyncStorage.removeItem('jwt_token');
+      await clearStoredToken();
 
       // Clear Redux state
       dispatch(logoutAction());
@@ -71,7 +72,7 @@ export const ProfileScreen: React.FC = () => {
   };
 
   const goToAdminLogin = async () => {
-    await AsyncStorage.removeItem('jwt_token');
+    await clearStoredToken();
     dispatch(logoutAction());
     navigation.reset({
       index: 0,

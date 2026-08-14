@@ -7,10 +7,10 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { themeColors } from '../../theme';
 import { AppHeader } from '../../components/AppHeader';
-import { PrimaryButton } from '../../components/PrimaryButton';
 import { DatePicker } from '../../components/DatePicker';
 import { BottomSheet } from '../../components/BottomSheet';
 import { ConfirmationDialog } from '../../components/ConfirmationDialog';
+import { FormActionButtons } from '../../components/FormActionButtons';
 import { RootStackParamList } from '../../navigation/types';
 import { inventoryApi } from '../../api/services/inventoryApi';
 import { eventApi } from '../../api/services/eventApi';
@@ -506,24 +506,13 @@ export const EventFormScreen: React.FC = () => {
               )}
             />
 
-            <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 16 }}>
-              <Button
-                mode="outlined"
-                onPress={() => navigation.goBack()}
-                textColor={themeColors.textMuted}
-                style={{ borderRadius: 8, height: 48, justifyContent: 'center', borderColor: themeColors.border, paddingHorizontal: 16, minWidth: 120 }}
-                disabled={saveEventMutation.isPending || loadingInitial}
-              >
-                CANCEL
-              </Button>
-              <PrimaryButton
-                onPress={handleSubmit(onSubmit)}
-                loading={saveEventMutation.isPending || loadingInitial}
-                style={{ marginVertical: 0, minWidth: 140 }}
-              >
-                {editId ? 'UPDATE BOOKING' : 'CREATE BOOKING'}
-              </PrimaryButton>
-            </View>
+            <FormActionButtons
+              onSubmit={handleSubmit(onSubmit)}
+              onCancel={() => navigation.goBack()}
+              submitLabel={editId ? 'UPDATE BOOKING' : 'CREATE BOOKING'}
+              loading={saveEventMutation.isPending || loadingInitial}
+              disabled={saveEventMutation.isPending || loadingInitial}
+            />
 
           </View>
         </ScrollView>

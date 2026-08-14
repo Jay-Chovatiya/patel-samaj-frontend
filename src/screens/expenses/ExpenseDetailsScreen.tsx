@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, ScrollView, Alert } from 'react-native';
+import { StyleSheet, View, ScrollView } from 'react-native';
 import { Text, Card, Button } from 'react-native-paper';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -12,6 +12,7 @@ import { themeColors } from '../../theme';
 import { AppHeader } from '../../components/AppHeader';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { ConfirmationDialog } from '../../components/ConfirmationDialog';
+import { showGlobalToast } from '../../context/ToastContext';
 import { RootStackParamList } from '../../navigation/types';
 import { expenseApi } from '../../api/services/expenseApi';
 import { formatCurrency, formatFullDate } from '../../utils/format';
@@ -39,19 +40,16 @@ export const ExpenseDetailsScreen: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
       setDeleteVisible(false);
-      Alert.alert('Success', 'Expense record deleted successfully.', [
-        { text: 'OK', onPress: () => navigation.goBack() }
-      ]);
+      navigation.goBack();
     },
-    onError: (err: any) => {
+    onError: () => {
       setDeleteVisible(false);
-      Alert.alert('Error', err?.userMessage || 'Failed to delete expense record.');
     },
   });
 
   const handleDelete = () => {
     if (!isAdmin) {
-      Alert.alert('Permission Denied', 'Only Admin users can delete expense records.');
+      showGlobalToast({ message: 'Only Admin users can delete expense records.', type: 'error' });
       return;
     }
     deleteMutation.mutate();
@@ -242,6 +240,7 @@ const styles = StyleSheet.create({
   btnRow: {
     flexDirection: 'row',
     justifyContent: 'center',
+    flexWrap: 'wrap',
     gap: 12,
     marginTop: 16,
   },
@@ -252,6 +251,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     paddingHorizontal: 16,
     minWidth: 130,
+    flex: 1,
   },
   errorContainer: {
     flex: 1,

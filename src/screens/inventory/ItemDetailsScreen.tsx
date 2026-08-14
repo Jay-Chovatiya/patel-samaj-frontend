@@ -243,6 +243,7 @@ const styles = StyleSheet.create({
   btnRow: {
     flexDirection: 'row',
     justifyContent: 'center',
+    flexWrap: 'wrap',
     gap: 12,
     marginTop: 16,
   },
@@ -253,6 +254,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     paddingHorizontal: 16,
     minWidth: 130,
+    flex: 1,
   },
   errorContainer: {
     flex: 1,
