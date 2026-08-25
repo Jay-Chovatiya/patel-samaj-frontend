@@ -34,7 +34,6 @@ export const ItemFormScreen: React.FC = () => {
       name: '',
       price: '',
       description: '',
-      isAvailable: true,
     },
   });
 
@@ -49,7 +48,6 @@ export const ItemFormScreen: React.FC = () => {
             name: item.itemName,
             price: item.currentPrice.toString(),
             description: item.description || '',
-            isAvailable: item.isAvailable,
           });
         } catch (err) {
           // Handle error loading
@@ -67,9 +65,8 @@ export const ItemFormScreen: React.FC = () => {
       const payload = {
         ...(editId ? { itemId: parseInt(editId, 10) } : {}),
         itemName: data.name,
-        currentPrice: parseFloat(data.price),
+        currentPrice: parseInt(data.price, 10) || 0,
         description: data.description,
-        isAvailable: data.isAvailable,
       };
       return await inventoryApi.createItem(payload);
     },
@@ -135,16 +132,17 @@ export const ItemFormScreen: React.FC = () => {
               name="price"
               rules={{
                 required: 'Rental rate is required',
-                validate: (v) => !isNaN(parseFloat(v)) && parseFloat(v) >= 0 || 'Enter valid price rate',
+                pattern: { value: /^[0-9]+$/, message: 'Rental rate must be a whole number (in Rupees)' },
+                validate: (v) => (!isNaN(parseInt(v, 10)) && parseInt(v, 10) >= 0) || 'Enter a valid positive price rate',
               }}
               render={({ field: { onChange, onBlur, value } }) => (
                 <View style={styles.inputContainer}>
                   <TextInput
                     label="Rental Rate Price (₹ / day)"
-                    keyboardType="numeric"
+                    keyboardType="number-pad"
                     mode="outlined"
                     onBlur={onBlur}
-                    onChangeText={onChange}
+                    onChangeText={(val) => onChange(val.replace(/[^0-9]/g, ''))}
                     value={value}
                     outlineColor={themeColors.border}
                     activeOutlineColor={themeColors.primary}
@@ -160,21 +158,6 @@ export const ItemFormScreen: React.FC = () => {
                 </View>
               )}
             />
-
-             <View style={[styles.row, { alignItems: 'center', marginVertical: 12, justifyContent: 'space-between' }]}>
-               <Text style={{ color: themeColors.text, fontSize: 16 }}>Available for Booking</Text>
-               <Controller
-                 control={control}
-                 name="isAvailable"
-                 render={({ field: { value, onChange } }) => (
-                   <Switch
-                     value={value}
-                     onValueChange={onChange}
-                     trackColor={{ true: themeColors.primary }}
-                   />
-                 )}
-               />
-             </View>
 
             <Controller
               control={control}

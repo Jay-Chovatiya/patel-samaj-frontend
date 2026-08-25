@@ -76,14 +76,14 @@ export const ExpenseListScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <AppHeader
-        title="Samaj Expenses"
+        title="Expenses"
         rightActionIcon="chart-donut"
         onRightAction={() => navigation.navigate('ExpenseSummary')}
       />
 
       <View style={styles.searchSection}>
         <SearchBar
-          placeholder="Search expenses by name or category..."
+          placeholder="Search expenses by category or description..."
           value={search}
           onChangeText={handleSearchChange}
         />

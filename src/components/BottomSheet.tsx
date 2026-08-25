@@ -116,7 +116,7 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
                         {item.name}
                       </Text>
                       <Text variant="bodyMedium" style={styles.itemPrice}>
-                        ₹{item.price.toFixed(2)}
+                        ₹{Math.round(item.price)}
                         {item.availableQty !== undefined && ` • Avail: ${item.availableQty}`}
                       </Text>
                     </View>
