@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { StyleSheet, View, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity } from 'react-native';
 import { Text, TextInput, HelperText, Card, Button, IconButton } from 'react-native-paper';
 import { useForm, Controller } from 'react-hook-form';
@@ -11,11 +11,11 @@ import { DatePicker } from '../../components/DatePicker';
 import { BottomSheet } from '../../components/BottomSheet';
 import { ConfirmationDialog } from '../../components/ConfirmationDialog';
 import { FormActionButtons } from '../../components/FormActionButtons';
+import { showGlobalToast } from '../../context/ToastContext';
 import { RootStackParamList } from '../../navigation/types';
 import { inventoryApi } from '../../api/services/inventoryApi';
 import { eventApi } from '../../api/services/eventApi';
 import { formatCurrency } from '../../utils/format';
-import { shareEventPdf } from '../../utils/pdfShare';
 import { Item, EventStatus, Event } from '../../types';
 
 type RoutePropType = RouteProp<RootStackParamList, 'EventForm'>;
@@ -47,7 +47,14 @@ export const EventFormScreen: React.FC = () => {
     queryFn: () => inventoryApi.getItems(),
   });
 
-  const { control, handleSubmit, setValue, reset, getValues, formState: { errors } } = useForm({
+  // Current Date (Today) used as default and minimum date to disable past dates
+  const today = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+
+  const { control, handleSubmit, setValue, reset, getValues, watch, formState: { errors } } = useForm({
     defaultValues: {
       familyHeadName: '',
       contactNumber: '',
@@ -59,6 +66,8 @@ export const EventFormScreen: React.FC = () => {
       paidAmount: '0',
     },
   });
+
+  const watchedStartDate = watch('startDate');
 
   // Calculate live total amount
   const liveTotalAmount = selectedItems.reduce((sum, item) => sum + item.quantity * item.price, 0);
@@ -82,7 +91,7 @@ export const EventFormScreen: React.FC = () => {
             startDate: stDate,
             endDate: enDate,
             remarks: event.remarks || '',
-            paidAmount: event.paidAmount?.toString() || '0',
+            paidAmount: (event.paidAmount || 0).toString(),
           });
 
           setOriginalStatusId(event.statusId);
@@ -118,7 +127,7 @@ export const EventFormScreen: React.FC = () => {
         startDate: formData.startDate.toISOString(),
         endDate: formData.endDate ? formData.endDate.toISOString() : null,
         remarks: formData.remarks,
-        paidAmount: parseFloat(formData.paidAmount || '0'),
+        paidAmount: parseInt(formData.paidAmount || '0', 10) || 0,
         totalAmount: liveTotalAmount,
         items: selectedItems.map((item) => ({
           itemId: item.itemId,
@@ -153,24 +162,12 @@ export const EventFormScreen: React.FC = () => {
       if (!editId) return;
       return await eventApi.closeEvent(editId);
     },
-    onSuccess: async (pdfData: ArrayBuffer | undefined) => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ['events'] });
       if (editId) {
         queryClient.invalidateQueries({ queryKey: ['event', editId] });
       }
       setCloseDialogVisible(false);
-
-      if (pdfData && editId) {
-        const values = getValues();
-        await shareEventPdf({
-          pdfData,
-          eventId: editId,
-          contactNumber: values.contactNumber,
-          familyHeadName: values.familyHeadName,
-          eventType: values.eventType,
-        });
-      }
-
       navigation.goBack();
     },
   });
@@ -192,6 +189,28 @@ export const EventFormScreen: React.FC = () => {
   });
 
   const onSubmit = (data: any) => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const startStr = new Date(data.startDate).toISOString().split('T')[0];
+
+    // User cannot select past date before today
+    if (!editId && startStr < todayStr) {
+      showGlobalToast({
+        message: 'Event start date cannot be in the past.',
+        type: 'error',
+      });
+      return;
+    }
+
+    const endStr = new Date(data.endDate || data.startDate).toISOString().split('T')[0];
+
+    if (endStr < startStr) {
+      showGlobalToast({
+        message: 'End date must be greater than or equal to start date.',
+        type: 'error',
+      });
+      return;
+    }
+
     saveEventMutation.mutate(data);
   };
 
@@ -396,9 +415,13 @@ export const EventFormScreen: React.FC = () => {
               render={({ field: { onChange, value } }) => (
                 <DatePicker
                   date={value}
+                  minimumDate={value ? new Date(value) : today}
                   onChange={(selectedDate: Date) => {
                     onChange(selectedDate);
-                    setValue('endDate', selectedDate);
+                    const currentEnd = getValues('endDate');
+                    if (!currentEnd || new Date(currentEnd) < selectedDate) {
+                      setValue('endDate', selectedDate);
+                    }
                   }}
                   label="Start Date"
                 />
@@ -410,7 +433,8 @@ export const EventFormScreen: React.FC = () => {
               name="endDate"
               render={({ field: { onChange, value } }) => (
                 <DatePicker
-                  date={value || new Date()}
+                  date={value || watchedStartDate || today}
+                  minimumDate={watchedStartDate ? new Date(watchedStartDate) : (value ? new Date(value) : today)}
                   onChange={onChange}
                   label="End Date"
                 />
@@ -436,7 +460,7 @@ export const EventFormScreen: React.FC = () => {
               <View key={item.itemId} style={styles.selectedItemRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.itemNameText}>{item.name}</Text>
-                  <Text style={styles.itemPriceText}>₹{item.price.toFixed(2)} / unit</Text>
+                  <Text style={styles.itemPriceText}>₹{Math.round(item.price)} / unit</Text>
                 </View>
                 <View style={styles.qtyContainer}>
                   <IconButton

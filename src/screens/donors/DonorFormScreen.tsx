@@ -85,7 +85,7 @@ export const DonorFormScreen: React.FC = () => {
       const payload = {
         ...(editId ? { donorId: parseInt(editId, 10) } : {}),
         fullName: data.fullName,
-        amount: parseFloat(data.amount),
+        amount: parseInt(data.amount, 10) || 0,
         donationDate: data.donationDate.toISOString(),
         remarks: data.remarks,
       };
@@ -156,16 +156,17 @@ export const DonorFormScreen: React.FC = () => {
               name="amount"
               rules={{
                 required: 'Donation amount is required',
-                validate: (v) => !isNaN(parseFloat(v)) && parseFloat(v) > 0 || 'Enter a valid positive amount',
+                pattern: { value: /^[0-9]+$/, message: 'Amount must be a whole number (in Rupees)' },
+                validate: (v) => (!isNaN(parseInt(v, 10)) && parseInt(v, 10) > 0) || 'Enter a valid positive amount',
               }}
               render={({ field: { onChange, onBlur, value } }) => (
                 <View style={styles.inputContainer}>
                   <TextInput
                     label="Donation Amount (₹)"
-                    keyboardType="numeric"
+                    keyboardType="number-pad"
                     mode="outlined"
                     onBlur={onBlur}
-                    onChangeText={onChange}
+                    onChangeText={(val) => onChange(val.replace(/[^0-9]/g, ''))}
                     value={value}
                     outlineColor={themeColors.border}
                     activeOutlineColor={themeColors.primary}

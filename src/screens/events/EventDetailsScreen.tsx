@@ -43,36 +43,29 @@ export const EventDetailsScreen: React.FC = () => {
   // Close Event Mutation
   const closeEventMutation = useMutation({
     mutationFn: () => eventApi.closeEvent(id),
-    onSuccess: async (pdfData: ArrayBuffer) => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ['events'] });
       queryClient.invalidateQueries({ queryKey: ['event', id] });
       setCloseDialogVisible(false);
-
-      if (pdfData && event) {
-        const result = await shareEventPdf({
-          pdfData,
-          eventId: id,
-          contactNumber: event.contactNumber,
-          familyHeadName: event.familyHeadName,
-          eventType: event.eventType,
-        });
-
-        if (result.downloadedToDevice) {
-          showGlobalToast({ message: result.message || 'Bill PDF downloaded to device successfully', type: 'success' });
-        } else if (result.success) {
-          showGlobalToast({ message: 'Event closed & bill ready for sharing', type: 'success' });
-        } else {
-          showGlobalToast({ message: 'Event closed successfully', type: 'success' });
-        }
-      } else {
-        showGlobalToast({ message: 'Event closed successfully', type: 'success' });
-      }
+      showGlobalToast({ message: 'Event closed successfully', type: 'success' });
     },
     onError: (err: any) => {
       showGlobalToast({ message: err.userMessage || 'Failed to close event', type: 'error' });
       setCloseDialogVisible(false);
     }
   });
+
+  const buildApprovalWhatsAppMessage = (evt: Event): string => {
+    const familyName = evt.familyHeadName || '';
+    const eventType = evt.eventType || '';
+    const startSlash = formatDate(evt.startDate).replace(/-/g, '/');
+    const endSlash = evt.endDate ? formatDate(evt.endDate).replace(/-/g, '/') : startSlash;
+    const dateStr = (evt.endDate && evt.endDate !== evt.startDate)
+      ? `${startSlash} થી ${endSlash}`
+      : startSlash;
+
+    return `જય શ્રી કૃષ્ણ ${familyName},\nલેઉવા પટેલ સમાજ તરફથી આપનું પ્રસંગ બુકિંગ મંજૂર કરવામાં આવ્યું છે.\nપ્રસંગ: ${eventType}\nતારીખ: ${dateStr}\nઆપના પ્રસંગ માટે ખૂબ ખૂબ શુભકામનાઓ!\n- લેઉવા પટેલ સમાજ - બીલડી`;
+  };
 
   // Status Change Mutation
   const updateStatusMutation = useMutation({
@@ -84,15 +77,47 @@ export const EventDetailsScreen: React.FC = () => {
       };
       return await eventApi.updateEvent(payload);
     },
-    onSuccess: () => {
+    onSuccess: (_, newStatusId) => {
       queryClient.invalidateQueries({ queryKey: ['events'] });
       queryClient.invalidateQueries({ queryKey: ['event', id] });
       setStatusDialogVisible(false);
       showGlobalToast({ message: 'Status updated successfully', type: 'success' });
+
+      // Automatically open WhatsApp with Gujarati confirmation message when status changes to APPROVED
+      if (newStatusId === EventStatus.APPROVED && event && event.contactNumber) {
+        openWhatsAppDirectChat(event.contactNumber, buildApprovalWhatsAppMessage(event));
+      }
     },
     onError: (err: any) => {
       showGlobalToast({ message: err.userMessage || 'Failed to update status', type: 'error' });
       setStatusDialogVisible(false);
+    }
+  });
+
+  // Dedicated PDF Generation Mutation calling GET /api/events/{id}/pdf
+  const generatePdfMutation = useMutation({
+    mutationFn: () => eventApi.getEventPdf(id),
+    onSuccess: async (pdfData: ArrayBuffer) => {
+      if (pdfData && event) {
+        const result = await shareEventPdf({
+          pdfData,
+          eventId: id,
+          contactNumber: event.contactNumber,
+          familyHeadName: event.familyHeadName,
+          eventType: event.eventType,
+        });
+
+        if (result.downloadedToDevice) {
+          showGlobalToast({ message: result.message || 'Bill PDF downloaded to device successfully', type: 'success' });
+        } else {
+          showGlobalToast({ message: 'Bill PDF generated successfully', type: 'success' });
+        }
+      } else {
+        showGlobalToast({ message: 'PDF generated successfully', type: 'success' });
+      }
+    },
+    onError: (err: any) => {
+      showGlobalToast({ message: err.userMessage || 'Failed to generate PDF', type: 'error' });
     }
   });
 
@@ -227,12 +252,9 @@ export const EventDetailsScreen: React.FC = () => {
               <Text style={styles.infoLabel}>Contact Number</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Text style={styles.infoValue}>{event.contactNumber}</Text>
-                {event.contactNumber ? (
+                {event.contactNumber && event.statusId === EventStatus.APPROVED ? (
                   <TouchableOpacity
-                    onPress={() => openWhatsAppDirectChat(
-                      event.contactNumber,
-                      `Hello ${event.familyHeadName}, regarding your event booking (${event.eventType})...`
-                    )}
+                    onPress={() => openWhatsAppDirectChat(event.contactNumber, buildApprovalWhatsAppMessage(event))}
                     style={{ marginLeft: 8 }}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
@@ -310,29 +332,45 @@ export const EventDetailsScreen: React.FC = () => {
         </Card>
 
         {/* Actions */}
+        {isClosed && (
+          <View style={styles.actionContainer}>
+            <Button
+              mode="contained"
+              onPress={() => generatePdfMutation.mutate()}
+              buttonColor={themeColors.primary}
+              icon="file-pdf-box"
+              style={styles.actionBtn}
+              loading={generatePdfMutation.isPending}
+              disabled={generatePdfMutation.isPending}
+            >
+              GENERATE PDF
+            </Button>
+          </View>
+        )}
+
         {!isClosed && !isCancelled && (
           <View style={styles.actionContainer}>
             {event.statusId === EventStatus.PENDING && isAdmin && (
-              <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12, marginBottom: 12 }}>
                 <Button
                   mode="contained"
                   onPress={() => confirmStatusChange(EventStatus.APPROVED)}
                   buttonColor={themeColors.success}
                   icon="check-circle-outline"
-                  style={{ paddingHorizontal: 16, flex: 1, minWidth: 140 }}
+                  compact={false}
                   disabled={updateStatusMutation.isPending || closeEventMutation.isPending}
                 >
-                  APPROVE EVENT
+                  APPROVE
                 </Button>
                 <Button
                   mode="contained"
                   onPress={() => confirmStatusChange(EventStatus.REJECTED)}
                   buttonColor={themeColors.error}
                   icon="close-circle-outline"
-                  style={{ paddingHorizontal: 16, flex: 1, minWidth: 140 }}
+                  compact={false}
                   disabled={updateStatusMutation.isPending || closeEventMutation.isPending}
                 >
-                  REJECT EVENT
+                  REJECT
                 </Button>
               </View>
             )}
@@ -357,7 +395,7 @@ export const EventDetailsScreen: React.FC = () => {
                 style={styles.actionBtn}
                 disabled={updateStatusMutation.isPending || closeEventMutation.isPending}
               >
-                CLOSE & LOCK EVENT
+                CLOSE & LOCK
               </Button>
             )}
             <Button

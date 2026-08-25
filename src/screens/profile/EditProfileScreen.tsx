@@ -231,6 +231,11 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 16,
     elevation: 2,
+    width: '100%',
+    maxWidth: 540,
+    alignSelf: 'center',
+    borderWidth: Platform.OS === 'web' ? 1 : 0.5,
+    borderColor: themeColors.border,
   },
   inputContainer: {
     marginBottom: 12,

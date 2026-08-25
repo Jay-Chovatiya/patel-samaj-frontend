@@ -72,8 +72,6 @@ export const ItemDetailsScreen: React.FC = () => {
     );
   }
 
-  const isAvailable = item.isAvailable;
-
   return (
     <View style={styles.container}>
       <AppHeader
@@ -100,27 +98,11 @@ export const ItemDetailsScreen: React.FC = () => {
             </View>
 
             <View style={styles.detailsGrid}>
-              <View style={styles.detailRow}>
-                <Text style={styles.label}>Status</Text>
-                <Badge
-                  style={[
-                    styles.statusBadge,
-                    { backgroundColor: isAvailable ? themeColors.success + '15' : themeColors.error + '15',
-                      color: isAvailable ? themeColors.success : themeColors.error }
-                  ]}
-                >
-                  {isAvailable ? 'AVAILABLE' : 'RENTED / UNAVAILABLE'}
-                </Badge>
-              </View>
-
               {item.description && (
-                <>
-                  <View style={styles.divider} />
-                  <View style={[styles.detailRow, { flexDirection: 'column', alignItems: 'flex-start' }]}>
-                    <Text style={[styles.label, { marginBottom: 6 }]}>Description</Text>
-                    <Text style={styles.descriptionText}>{item.description}</Text>
-                  </View>
-                </>
+                <View style={[styles.detailRow, { flexDirection: 'column', alignItems: 'flex-start' }]}>
+                  <Text style={[styles.label, { marginBottom: 6 }]}>Description</Text>
+                  <Text style={styles.descriptionText}>{item.description}</Text>
+                </View>
               )}
             </View>
           </Card.Content>

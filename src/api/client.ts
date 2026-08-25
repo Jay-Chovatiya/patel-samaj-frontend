@@ -35,9 +35,9 @@ apiClient.interceptors.request.use(
       if (isTokenExpired(token, expiresAt)) {
         clearStoredToken();
         store.dispatch(logoutAction());
-        const expiryError = new Error('Session has expired. Please log in again.');
-        (expiryError as any).userMessage = 'Session has expired. Please log in again.';
-        return Promise.reject(expiryError);
+        const silentAuthError = new Error('Unauthorized');
+        (silentAuthError as any).isAuthError = true;
+        return Promise.reject(silentAuthError);
       }
 
       if (config.headers) {
@@ -118,12 +118,17 @@ export const extractSuccessMessage = (response: any): string => {
   const url = config.url || '';
   const method = (config.method || 'get').toLowerCase();
 
-  // 1. Plain string message
+  if (url.includes('/auth/login')) {
+    if (data && typeof data === 'object' && typeof data.message === 'string' && data.message.trim()) {
+      return data.message.trim();
+    }
+    return 'Logged in successfully.';
+  }
+
   if (typeof data === 'string' && data.trim().length > 0 && !data.trim().startsWith('<html') && data.trim().length < 200) {
     return data.trim();
   }
 
-  // 2. Object with message / msg / success property
   if (typeof data === 'object' && data !== null) {
     if (typeof data.message === 'string' && data.message.trim()) {
       return data.message.trim();
@@ -136,10 +141,6 @@ export const extractSuccessMessage = (response: any): string => {
     }
   }
 
-  // 3. Contextual fallback based on endpoint and method
-  if (url.includes('/auth/login')) {
-    return 'Logged in successfully.';
-  }
   if (url.includes('/auth/forgot-password')) {
     return 'Password reset instructions sent successfully.';
   }
@@ -197,16 +198,13 @@ export const extractSuccessMessage = (response: any): string => {
   return 'Operation completed successfully.';
 };
 
-// Interceptor to handle global responses & errors
 apiClient.interceptors.response.use(
   (response) => {
     const config = response.config || {};
     const method = (config.method || 'get').toLowerCase();
     const url = config.url || '';
 
-    // Check if this is a mutating request (POST, PUT, PATCH, DELETE)
     const isMutating = ['post', 'put', 'patch', 'delete'].includes(method);
-    // Ignore pagination list queries like /donors/list, /events/list, /expenses/list, /user/list
     const isListQuery = url.endsWith('/list') || url.includes('/list?');
     const suppressToast =
       config.headers?.['x-suppress-toast'] === 'true' ||
@@ -220,13 +218,19 @@ apiClient.interceptors.response.use(
     return response;
   },
   (error) => {
-    if (error.response?.status === 401) {
-      // Automatic logout on token expiration / unauthorized
+    const status = error.response?.status;
+    const isAuthError =
+      status === 401 ||
+      status === 403 ||
+      error?.isAuthError ||
+      error?.message === 'Unauthorized';
+
+    if (isAuthError) {
       clearStoredToken();
       store.dispatch(logoutAction());
+      return Promise.reject(error);
     }
 
-    // Attach extracted user-friendly error message
     error.userMessage = error.userMessage || extractErrorMessage(error);
 
     const suppressToast =

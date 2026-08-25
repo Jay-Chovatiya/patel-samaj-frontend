@@ -37,10 +37,20 @@ export const eventApi = {
     return res.data;
   },
 
-  closeEvent: async (id: string): Promise<ArrayBuffer> => {
-    const res = await apiClient.put<ArrayBuffer>(`/events/${id}/close`, null, {
+  closeEvent: async (id: string): Promise<Event> => {
+    const res = await apiClient.put<Event>(`/events/${id}/close`, null);
+    return res.data;
+  },
+
+  getEventPdf: async (id: string | number): Promise<ArrayBuffer> => {
+    const res = await apiClient.get<ArrayBuffer>(`/events/${id}/pdf`, {
       responseType: 'arraybuffer',
     });
+    return res.data;
+  },
+
+  getCalendarCounts: async (): Promise<any> => {
+    const res = await apiClient.get('/events/calendar-counts');
     return res.data;
   },
 };

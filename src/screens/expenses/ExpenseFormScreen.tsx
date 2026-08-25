@@ -67,7 +67,7 @@ export const ExpenseFormScreen: React.FC = () => {
     mutationFn: async (data: any) => {
       const payload = {
         ...(editId ? { expenseId: parseInt(editId, 10) } : {}),
-        amount: parseFloat(data.amount),
+        amount: parseInt(data.amount, 10) || 0,
         expenseDate: data.expenseDate.toISOString().split('T')[0],
         category: data.category || '',
         description: data.description,
@@ -136,16 +136,17 @@ export const ExpenseFormScreen: React.FC = () => {
               name="amount"
               rules={{
                 required: 'Amount is required',
-                validate: (v) => !isNaN(parseFloat(v)) && parseFloat(v) > 0 || 'Enter a valid positive amount',
+                pattern: { value: /^[0-9]+$/, message: 'Amount must be a whole number' },
+                validate: (v) => (!isNaN(parseInt(v, 10)) && parseInt(v, 10) > 0) || 'Enter a valid positive amount',
               }}
               render={({ field: { onChange, onBlur, value } }) => (
                 <View style={styles.inputContainer}>
                   <TextInput
                     label="Amount Charged (₹)"
-                    keyboardType="numeric"
+                    keyboardType="number-pad"
                     mode="outlined"
                     onBlur={onBlur}
-                    onChangeText={onChange}
+                    onChangeText={(val) => onChange(val.replace(/[^0-9]/g, ''))}
                     value={value}
                     outlineColor={themeColors.border}
                     activeOutlineColor={themeColors.primary}

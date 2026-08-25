@@ -66,7 +66,7 @@ export const InventoryListScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <AppHeader title="Inventory Management" showBack={true} onBack={() => navigation.goBack()} />
+      <AppHeader title="Inventory" showBack={true} onBack={() => navigation.goBack()} />
 
       {/* Pricing Snapshot Important Warning Banner */}
       <Banner
@@ -88,7 +88,7 @@ export const InventoryListScreen: React.FC = () => {
 
       <View style={styles.searchSection}>
         <SearchBar
-          placeholder="Search items by name or category..."
+          placeholder="Search items by name..."
           value={search}
           onChangeText={setSearch}
         />
@@ -105,28 +105,15 @@ export const InventoryListScreen: React.FC = () => {
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[themeColors.primary]} />
           }
           renderItem={({ item }) => {
-            const isAvailable = item.isAvailable;
             return (
               <ReusableCard
                 onPress={() => navigation.navigate('ItemDetails', { id: String(item.itemId) })}
-                accentColor={isAvailable ? themeColors.success : themeColors.error}
               >
                 <View style={styles.cardHeader}>
                   <View style={{ flex: 1 }}>
                     <Text variant="titleMedium" style={styles.itemName}>
                       {item.itemName}
                     </Text>
-                  </View>
-                  <View style={styles.badgeRow}>
-                    <Badge
-                      style={[
-                        styles.statusBadge,
-                        { backgroundColor: isAvailable ? themeColors.success + '15' : themeColors.error + '15',
-                          color: isAvailable ? themeColors.success : themeColors.error }
-                      ]}
-                    >
-                      {isAvailable ? 'AVAILABLE' : 'RENTED / UNAVAILABLE'}
-                    </Badge>
                   </View>
                 </View>
 
